@@ -32,6 +32,12 @@ npm run typecheck    # TypeScript strict
 npm run validate:data  # contrôles de cohérence des données du réseau
 ```
 
+Version autonome sans serveur (un dossier à ouvrir directement dans le navigateur) :
+
+```bash
+npm run build:standalone   # génère dist-standalone/index.html
+```
+
 Aucune API externe ni clé n'est nécessaire : une fois les dépendances installées, tout fonctionne hors ligne. Les sauvegardes sont stockées dans le navigateur (localStorage).
 
 ## Prise en main (2 minutes)

@@ -150,3 +150,4 @@ vite.config.ts.timestamp-*
 
 # Next.js
 next-env.d.ts
+dist-standalone

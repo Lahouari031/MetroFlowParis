@@ -1,5 +1,6 @@
 'use client';
 
+import { isHiddenIncident } from '@/types/incident';
 import { AlertTriangle, CheckCircle2, Info, RotateCcw, SkipBack, Siren } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { controller } from '@/lib/simulationController';
@@ -9,7 +10,7 @@ import { NO_INCIDENTS } from '@/store/simulationStore';
 import { useSelection } from '@/store/simulationStore';
 import type { EventLevel } from '@/types/simulation';
 import { Button, ConfirmDialog, cx, Segmented } from '../ui/primitives';
-import { SPEEDS } from './TopBar';
+import { SPEEDS, speedLabel, speedTitle } from './TopBar';
 
 const LEVEL_ICON: Record<EventLevel, typeof Info> = {
   info: Info,
@@ -42,8 +43,11 @@ export function BottomTimeline() {
 
   const ticks = useMemo(() => {
     const out: number[] = [];
-    const first = Math.ceil(start / 900) * 900;
-    for (let t = first; t <= end; t += 900) out.push(t);
+    // Graduation adaptée à la durée (≈ 12 repères au plus) : 15 min, 30 min, 1 h, 2 h…
+    const span = Math.max(1, end - start);
+    const step = [900, 1800, 3600, 7200, 10800].find((s) => span / s <= 12) ?? 14400;
+    const first = Math.ceil(start / step) * step;
+    for (let t = first; t <= end; t += step) out.push(t);
     return out;
   }, [start, end]);
 
@@ -66,7 +70,7 @@ export function BottomTimeline() {
           </Button>
         </div>
         <div className="flex items-center gap-2 text-[10px] text-muted">
-          <Segmented size="xs" value={speed} onChange={(v) => controller.setSpeed(v)} options={SPEEDS.map((s) => ({ value: s, label: `×${s}` }))} />
+          <Segmented size="xs" value={speed} onChange={(v) => controller.setSpeed(v)} options={SPEEDS.map((s) => ({ value: s, label: speedLabel(s), title: speedTitle(s) }))} />
           <span className="tabular" title="Vitesse effective : le moteur ralentit si le calcul dépasse le budget d'une image">
             {running ? `eff. ×${effective.toFixed(1)}` : 'en pause'}
           </span>
@@ -103,7 +107,7 @@ export function BottomTimeline() {
               <span className="absolute left-1 top-0.5 text-[9px] text-faint">{fmtClock(t)}</span>
             </div>
           ))}
-          {incidents.map((inc) => {
+          {incidents.filter((inc) => !isHiddenIncident(inc)).map((inc) => {
             const s = inc.startTime;
             const e = inc.endTime ?? (inc.duration !== null ? s + inc.duration : end);
             return (

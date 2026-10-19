@@ -118,6 +118,10 @@ export interface SavedScenario {
   actions: SimAction[];
   /** Temps simulé atteint au moment de la sauvegarde. */
   savedTime: number;
+  /** Lignes gérées par le joueur (partie personnalisée). */
+  managedLines?: LineId[] | null;
+  /** Titre de la partie personnalisée. */
+  title?: string;
 }
 
 export interface ChallengeProgress {

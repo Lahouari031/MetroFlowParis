@@ -21,6 +21,8 @@ export interface SegmentVisual {
   width: number;
   haloWidth: number;
   hitWidth: number;
+  /** Ligne non gérée par le joueur : estompée. */
+  dimmed: boolean;
 }
 
 /** Tronçon : halo de congestion éventuel, trait de ligne épais, zone de clic élargie. */
@@ -34,7 +36,7 @@ export const MetroSegment = memo(function MetroSegment({
   onHover: (id: string | null, e?: React.PointerEvent) => void;
 }) {
   return (
-    <g>
+    <g opacity={v.dimmed ? 0.2 : 1}>
       {(v.selected || v.hovered) && (
         <path d={v.path} fill="none" stroke="#1E1E1E" strokeOpacity={v.selected ? 0.25 : 0.12} strokeWidth={v.haloWidth * 1.3} strokeLinecap="round" strokeLinejoin="round" />
       )}

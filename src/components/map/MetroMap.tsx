@@ -19,7 +19,7 @@ import {
 import { mapCommands, useMapView } from '@/store/mapViewStore';
 import { useSettings } from '@/store/settingsStore';
 import { useSelection, useSimulation } from '@/store/simulationStore';
-import type { Incident } from '@/types/incident';
+import { isHiddenIncident, type Incident } from '@/types/incident';
 import type { Network } from '@/types/network';
 import { getGeometry } from './geometry';
 import { GeographyLayer } from './GeographyLayer';
@@ -64,6 +64,7 @@ export function MetroMap() {
   const [hover, setHover] = useState<Hover>(null);
 
   const snapshot = useSimulation((s) => s.snapshot);
+  const managedLines = useSimulation((s) => s.managedLines);
   const refSnapshot = useSimulation((s) => s.refSnapshot);
   const layers = useSettings((s) => s.layers);
   const flowMode = useSettings((s) => s.flowMode);
@@ -250,6 +251,7 @@ export function MetroMap() {
       width: sz.line,
       haloWidth: sz.halo,
       hitWidth: sz.hit,
+      dimmed: !!managedLines && !managedLines.includes(seg.line),
     };
   });
 
@@ -301,6 +303,7 @@ export function MetroMap() {
       routeEnd: !!route && (route.from === st.id || route.to === st.id),
       crowd: layers.crowds && k >= 0.7 ? Math.min(12, Math.round(waiting / PASSENGERS_PER_DOT)) : 0,
       overcrowded: layers.crowds && load >= 1,
+      dimmed: !!managedLines && !st.lines.some((l) => managedLines.includes(l)),
     };
   });
 
@@ -309,7 +312,7 @@ export function MetroMap() {
     if (!layers.incidents || !snapshot) return [];
     const placed = new Map<string, number>();
     return snapshot.incidents
-      .filter((i) => i.status !== 'resolved')
+      .filter((i) => i.status !== 'resolved' && !isHiddenIncident(i))
       .map((inc) => {
         const p = incidentPosition(network, geo, inc);
         const key = `${Math.round(p.x)},${Math.round(p.y)}`;
@@ -386,7 +389,12 @@ export function MetroMap() {
               const line = network.lineById.get(b.line as never)!;
               const label = b.line.replace('bis', 'b');
               return (
-                <g key={`${b.stationId}-${b.line}`} transform={`translate(${b.x},${b.y}) scale(${markerScale * 0.85})`} pointerEvents="none">
+                <g
+                  key={`${b.stationId}-${b.line}`}
+                  transform={`translate(${b.x},${b.y}) scale(${markerScale * 0.85})`}
+                  opacity={managedLines && !managedLines.includes(b.line as never) ? 0.25 : 1}
+                  pointerEvents="none"
+                >
                   <rect x={-12} y={-10} width={24} height={20} rx={5} fill={line.color} />
                   <text textAnchor="middle" dy={4.5} fontSize={label.length > 2 ? 10 : 13} fontWeight={800} fill={line.textColor}>
                     {label}

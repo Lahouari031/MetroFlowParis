@@ -5,14 +5,17 @@ import { useEffect, type ReactNode } from 'react';
 import { controller } from '@/lib/simulationController';
 import { useSettings } from '@/store/settingsStore';
 import { useSimulation } from '@/store/simulationStore';
+import { NewGameModal } from '../scenarios/NewGameModal';
 import { ResultModal } from '../scenarios/ResultModal';
 import { cx } from '../ui/primitives';
 import { BottomTimeline } from './BottomTimeline';
 import { TopBar } from './TopBar';
+import { FeedToasts, useTrafficFeedSync } from './TrafficFeed';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const ready = useSimulation((s) => s.ready);
   const dataIssues = useSimulation((s) => s.dataIssues);
+  useTrafficFeedSync();
 
   useEffect(() => {
     useSettings.getState().hydrate();
@@ -47,8 +50,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
       {ready && <BottomTimeline />}
       <Toasts />
+      {ready && <FeedToasts />}
       <BusyOverlay />
       <ResultModal />
+      <NewGameModal />
     </div>
   );
 }

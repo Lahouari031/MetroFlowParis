@@ -18,8 +18,13 @@ export function NetworkControls() {
   const cap = useSimulation((s) => s.snapshot?.lineCapacity);
   const trains = useSimulation((s) => s.snapshot?.lineTrains);
   const fleetLimit = useSimulation((s) => s.snapshot?.lineFleetLimit);
+  const serviceLevel = useSimulation((s) => s.snapshot?.service.level ?? 1);
+  const managed = useSimulation((s) => s.managedLines);
   const [open, setOpen] = useState<LineId | null>(null);
+  const [othersOpen, setOthersOpen] = useState(false);
   if (!regulation || !freq || !cap || !trains || !fleetLimit) return null;
+  const mine = managed ? network.lines.filter((l) => managed.includes(l.id)) : network.lines;
+  const others = managed ? network.lines.filter((l) => !managed.includes(l.id)) : [];
 
   return (
     <div className="space-y-2.5">
@@ -39,12 +44,13 @@ export function NetworkControls() {
           onCommit={(v) => controller.dispatch({ type: 'global.frequency', factor: v / 100 })}
         />
       </div>
+      {managed && <div className="text-[10px] font-semibold uppercase tracking-wider text-accent">Mes lignes</div>}
       <ul className="space-y-1">
-        {network.lines.map((l) => {
+        {mine.map((l) => {
           const ctl = regulation.lines[l.id];
           const isOpen = open === l.id;
           const baseFleet = referenceFleet(network, l);
-          const programmed = Math.min(l.maxFrequency, ctl.frequency * regulation.globalFrequencyFactor);
+          const programmed = Math.min(l.maxFrequency, ctl.frequency * regulation.globalFrequencyFactor) * serviceLevel;
           const limitedByFleet = fleetLimit[l.id] < programmed - 0.05;
           return (
             <li key={l.id} className="rounded-md border border-edge bg-panel-3/40">
@@ -108,6 +114,30 @@ export function NetworkControls() {
           );
         })}
       </ul>
+      {others.length > 0 && (
+        <div>
+          <button type="button" className="flex w-full items-center gap-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted" onClick={() => setOthersOpen((o) => !o)} aria-expanded={othersOpen}>
+            {othersOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Autres lignes (exploitation automatique)
+          </button>
+          {othersOpen ? (
+            <ul className="mt-1 space-y-0.5">
+              {others.map((l) => (
+                <li key={l.id} className="flex items-center gap-2 px-2 py-0.5 text-[11px] text-muted">
+                  <LineBadge line={l.id} size={16} />
+                  <span className="tabular">{fmtNum(freq[l.id], 1)} trains/h</span>
+                  <span className="tabular ml-auto text-[10px] text-faint">{fmtInt(cap[l.id] / 1000)}k voy./h</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 flex flex-wrap gap-1 opacity-60">
+              {others.map((l) => (
+                <LineBadge key={l.id} line={l.id} size={16} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <p className="text-[10px] leading-snug text-faint">
         Plus de trains = plus de capacité et moins d&apos;attente, mais un coût opérationnel fictif plus élevé (0,6 k€/rame/h ; 4 k€ par rame de réserve mobilisée).
       </p>

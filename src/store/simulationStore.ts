@@ -1,11 +1,11 @@
 'use client';
 
 import { create } from 'zustand';
-import type { DataIssue } from '@/types/network';
+import type { DataIssue, LineId } from '@/types/network';
 import type { ChallengeProgress, SavedScenario, ScoreResult } from '@/types/scenario';
 import type { HistoryPoint, SimAction, SimEvent, SimSnapshot } from '@/types/simulation';
 
-export type Speed = 1 | 2 | 5 | 10;
+export type Speed = 0.25 | 0.5 | 1 | 2 | 5 | 10 | 20;
 
 export interface SimulationStore {
   ready: boolean;
@@ -25,6 +25,8 @@ export interface SimulationStore {
   effectiveSpeed: number;
   scenarioId: string | null;
   scenarioTitle: string;
+  /** Lignes dont le joueur s'occupe (null = tout le réseau). */
+  managedLines: LineId[] | null;
   startTime: number;
   endTime: number;
   seed: number;
@@ -50,10 +52,11 @@ export const useSimulation = create<SimulationStore>(() => ({
   events: [],
   actions: [],
   running: false,
-  speed: 2,
+  speed: 1,
   effectiveSpeed: 0,
   scenarioId: null,
   scenarioTitle: '',
+  managedLines: null,
   startTime: 0,
   endTime: 0,
   seed: 0,

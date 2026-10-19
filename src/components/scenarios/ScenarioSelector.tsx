@@ -101,7 +101,7 @@ export function AdvancedLauncher() {
     if (!Number.isInteger(s) || s < 0) return setError('Graine : entier positif attendu.');
     if (!(d >= 0.2 && d <= 2.5)) return setError('Demande : entre 0,2 et 2,5.');
     if (!Number.isFinite(h) || !Number.isFinite(m)) return setError('Heure de début invalide.');
-    if (!(dur >= 15 && dur <= 360)) return setError('Durée : entre 15 et 360 minutes.');
+    if (!(dur >= 15 && dur <= 1440)) return setError('Durée : entre 15 et 1440 minutes (24 h).');
     setError(null);
     controller.loadScenario(base, false, { seed: s, demandScale: d, startTime: h * 3600 + m * 60, duration: dur * 60 });
     router.push('/');

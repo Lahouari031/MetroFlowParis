@@ -7,7 +7,7 @@ import { fmtClock } from '@/lib/metrics';
 import { controller } from '@/lib/simulationController';
 import { useSelection, useSimulation } from '@/store/simulationStore';
 import { NO_INCIDENTS } from '@/store/simulationStore';
-import type { Incident, Severity } from '@/types/incident';
+import { isHiddenIncident, type Incident, type Severity } from '@/types/incident';
 import { Button, cx, Segmented } from '../ui/primitives';
 
 export const STATUS_LABEL: Record<Incident['status'], string> = {
@@ -33,7 +33,7 @@ export function remainingSeconds(inc: Incident): number | null {
 export function IncidentList({ showResolved = false }: { showResolved?: boolean }) {
   const incidents = useSimulation((s) => s.snapshot?.incidents ?? NO_INCIDENTS);
   const selected = useSelection((s) => s.selected);
-  const list = incidents.filter((i) => showResolved || i.status !== 'resolved').slice().reverse();
+  const list = incidents.filter((i) => !isHiddenIncident(i) && (showResolved || i.status !== 'resolved')).slice().reverse();
   if (list.length === 0) return <p className="text-[11px] text-faint">Aucune perturbation en cours.</p>;
   return (
     <ul className="space-y-1.5">

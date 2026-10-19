@@ -136,7 +136,9 @@ export function TrainLayer({ network, visible }: { network: Network; visible: bo
       const wid = sz.trainWidth;
       const off = sz.trainOffset;
 
+      const managed = useSimulation.getState().managedLines;
       for (const s of services) {
+        ctx.globalAlpha = managed && !managed.includes(s.line as never) ? 0.25 : 1;
         // Durée de chaque étape (temps de parcours effectif) et du cycle complet.
         let cycle = 0;
         const durs = s.legs.map((e) => Math.max(30, snap.edgeTravelTime[e]));

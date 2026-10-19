@@ -48,6 +48,21 @@ Aucune API externe ni clé n'est nécessaire : une fois les dépendances install
 4. Régulez dans **Lignes et rames** (panneau de gauche) : renforcez la fréquence et mobilisez des rames de réserve sur les lignes 7 et 4. Les indicateurs de droite se comparent en continu à la même partie « sans vos décisions ».
 5. À la fin du scénario, le **bilan** donne votre score, les objectifs atteints et une médaille.
 
+### Partie libre : vos horaires, vos lignes
+
+Bouton **Nouvelle partie** (barre du haut, ou page Scénarios) :
+
+- **Horaires** : pointe du matin, soirée, **journée de 24 h (7 h → 7 h)** ou horaires personnalisés (1 à 24 h). Le métro suit des horaires de service simulés : fréquences réduites en début de matinée, en heures creuses et en soirée, **fermeture de 1 h 15 à 5 h 30** (le temps défile alors en accéléré) ;
+- **Mes lignes** : choisissez combien de lignes vous gérez et lesquelles (ou tirez-les au hasard). Elles sont mises en avant sur le plan et dans le panneau « Lignes et rames » ; les autres sont exploitées automatiquement ;
+- **Incidents imprévus** (aucun, rares, normaux, fréquents) : tirés à partir de la graine sur vos lignes, invisibles jusqu'à leur déclenchement ;
+- **Affluence** et **graine** (même graine + mêmes réglages = même partie).
+
+Vitesses : ×¼ (15 s simulées par seconde), ×½, ×1 (1 min/s), ×2, ×5, ×10, ×20.
+
+### Info trafic
+
+Chaque perturbation, rétablissement, forte affluence sur vos lignes, fermeture de nuit ou décision de régulation est publiée dans un **fil d'info trafic** (panneau de droite) et apparaît en **notification** en bas à droite, à la manière des alertes reçues par les voyageurs. Cliquez sur une notification pour localiser l'incident. Les comptes et messages sont fictifs et générés par la simulation.
+
 ### Interactions avec la carte
 
 | Action | Effet |

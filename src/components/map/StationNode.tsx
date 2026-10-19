@@ -26,6 +26,8 @@ export interface StationVisual {
   /** Nombre de petits points « voyageurs en attente » à dessiner (0 = aucun). */
   crowd: number;
   overcrowded: boolean;
+  /** Station desservie uniquement par des lignes non gérées : estompée. */
+  dimmed: boolean;
 }
 
 /** Station façon Mini Metro : rond blanc cerclé de noir, voyageurs en attente en petits points. */
@@ -47,6 +49,7 @@ export const StationNode = memo(function StationNode({
   return (
     <g
       transform={`translate(${s.x},${s.y})`}
+      opacity={v.dimmed ? 0.3 : 1}
       style={{ cursor: 'pointer' }}
       role="button"
       tabIndex={-1}

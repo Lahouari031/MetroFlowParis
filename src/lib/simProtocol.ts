@@ -3,7 +3,12 @@ import type { ScheduledIncident, ScoreResult } from '@/types/scenario';
 import type { ActionPayload, SimAction, SimulationConfig } from '@/types/simulation';
 import type { SimulationStore } from '@/store/simulationStore';
 
-export type StatePatch = Partial<
+/**
+ * Mise à jour de l'état. Les historiques sont envoyés de façon incrémentale : `history`,
+ * `segmentSeries` et `stationSeries` contiennent les points à partir de l'indice `historyFrom`
+ * (0 = remplacement complet) ; idem pour la référence avec `refHistoryFrom`.
+ */
+export type StatePatch = { historyFrom?: number; refHistoryFrom?: number } & Partial<
   Pick<
     SimulationStore,
     | 'snapshot'

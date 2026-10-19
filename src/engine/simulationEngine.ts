@@ -26,6 +26,7 @@ import type {
   SimulationConfig,
 } from '@/types/simulation';
 import { DemandModel, GENERATION_INTERVAL, type GeneratedTrip } from './demandGenerator';
+import { demandOpen, SERVICE_PERIODS, servicePeriodIndex } from './servicePeriods';
 import {
   defaultEffects,
   describeTarget,
@@ -124,6 +125,8 @@ export class SimulationEngine {
   private cohorts: Cohort[] = [];
   private cohortCounter = 0;
   private lastGeneration = -Infinity;
+  /** Période de service horaire en cours (voir servicePeriods.ts). */
+  private servicePeriod = 0;
   private lastCongestionRefresh: number;
   private lastStuckCheck: number;
 
@@ -216,6 +219,7 @@ export class SimulationEngine {
     for (const sch of scheduled) {
       this.createIncident({ ...sch, startTime: config.startTime + sch.offset, origin: 'scenario' }, false);
     }
+    this.servicePeriod = servicePeriodIndex(config.startTime - (config.warmupSeconds ?? 0));
     this.rebuildState();
     this.warmUp(config.warmupSeconds ?? 0);
   }
@@ -250,7 +254,7 @@ export class SimulationEngine {
 
   private rebuildState() {
     this.networkVersion++;
-    this.state = computeNetworkState(this.network, this.config, this.incidents, this.networkVersion);
+    this.state = computeNetworkState(this.network, this.config, this.incidents, this.networkVersion, SERVICE_PERIODS[this.servicePeriod].level);
     this.router.update(this.state, this.edgeSaturation, true);
     for (const c of this.cohorts) c.needsCheck = true;
     this.checkAllCohorts();
@@ -290,7 +294,7 @@ export class SimulationEngine {
               n++;
             }
           }
-          this.log('success', `Retour à la normale — ${describeTarget(net, a.spec.target)} : ${n} incident(s) levé(s)`);
+          this.log('success', `Retour à la normale — ${describeTarget(net, a.spec.target)} : ${n} incident(s) levé(s)`, { kind: 'incident.end' });
           this.rebuildState();
           return { ok: true };
         }
@@ -310,30 +314,30 @@ export class SimulationEngine {
         }
         if (a.type === 'incident.resolve') {
           this.endIncident(inc, 'Levé par le régulateur');
-          this.log('success', `Incident levé : ${inc.label}`, { incidentId: inc.id });
+          this.log('success', `Incident levé : ${inc.label}`, { incidentId: inc.id, kind: 'incident.end' });
         } else if (a.type === 'incident.suspend') {
           if (inc.status !== 'active') return { ok: false, error: "L'incident n'est pas actif" };
           inc.status = 'suspended';
           inc.history.push({ time: this.time, action: 'Suspendu' });
-          this.log('info', `Incident suspendu : ${inc.label}`, { incidentId: inc.id });
+          this.log('info', `Incident suspendu : ${inc.label}`, { incidentId: inc.id, kind: 'incident.update' });
         } else if (a.type === 'incident.resume') {
           if (inc.status !== 'suspended') return { ok: false, error: "L'incident n'est pas suspendu" };
           inc.status = 'active';
           inc.history.push({ time: this.time, action: 'Repris' });
-          this.log('warning', `Incident repris : ${inc.label}`, { incidentId: inc.id });
+          this.log('warning', `Incident repris : ${inc.label}`, { incidentId: inc.id, kind: 'incident.update' });
         } else if (a.type === 'incident.extend') {
           if (!(a.seconds > 0)) return { ok: false, error: 'Prolongation invalide' };
           if (inc.duration === null) return { ok: false, error: 'Incident permanent : pas de durée à prolonger' };
           inc.duration += a.seconds;
           inc.history.push({ time: this.time, action: `Prolongé de ${Math.round(a.seconds / 60)} min` });
-          this.log('info', `Incident prolongé de ${Math.round(a.seconds / 60)} min : ${inc.label}`, { incidentId: inc.id });
+          this.log('info', `Incident prolongé de ${Math.round(a.seconds / 60)} min : ${inc.label}`, { incidentId: inc.id, kind: 'incident.update' });
           return { ok: true };
         } else {
           if (inc.customEffects) return { ok: false, error: 'Effets personnalisés : la gravité ne peut pas être recalculée' };
           inc.severity = a.severity;
           inc.effects = defaultEffects(net, { ...inc, startTime: inc.startTime });
           inc.history.push({ time: this.time, action: `Gravité : ${SEVERITY_LABELS[a.severity]}` });
-          this.log('info', `Gravité modifiée (${SEVERITY_LABELS[a.severity]}) : ${inc.label}`, { incidentId: inc.id });
+          this.log('info', `Gravité modifiée (${SEVERITY_LABELS[a.severity]}) : ${inc.label}`, { incidentId: inc.id, kind: 'incident.update' });
         }
         this.rebuildState();
         return { ok: true };
@@ -345,7 +349,7 @@ export class SimulationEngine {
           return { ok: false, error: `Fréquence hors limites (1 à ${line.maxFrequency} trains/h)` };
         }
         this.config.regulation.lines[a.line].frequency = a.frequency;
-        this.log('info', `Ligne ${a.line} : fréquence programmée ${a.frequency} trains/h`);
+        this.log('info', `Ligne ${a.line} : fréquence programmée ${a.frequency} trains/h`, { kind: 'regulation', line: a.line });
         this.rebuildState();
         return { ok: true };
       }
@@ -360,14 +364,14 @@ export class SimulationEngine {
         const delta = a.count - ctl.reserveMobilized;
         if (delta > 0) this.operatingCost += delta * this.config.costPerReserveTrain;
         ctl.reserveMobilized = a.count;
-        this.log('info', `Ligne ${a.line} : ${a.count} rame(s) de réserve mobilisée(s)`);
+        this.log('info', `Ligne ${a.line} : ${a.count} rame(s) de réserve mobilisée(s)`, { kind: 'regulation', line: a.line });
         this.rebuildState();
         return { ok: true };
       }
       case 'global.frequency': {
         if (!(a.factor >= 0.5 && a.factor <= 1.3)) return { ok: false, error: 'Facteur global hors limites (50 % à 130 %)' };
         this.config.regulation.globalFrequencyFactor = a.factor;
-        this.log('info', `Fréquences globales : ${Math.round(a.factor * 100)} %`);
+        this.log('info', `Fréquences globales : ${Math.round(a.factor * 100)} %`, { kind: 'regulation' });
         this.rebuildState();
         return { ok: true };
       }
@@ -380,11 +384,11 @@ export class SimulationEngine {
         if (a.type === 'station.close') {
           if (has) return { ok: false, error: 'Station déjà fermée' };
           list.push(st.id);
-          this.log('warning', `Station fermée par le régulateur : ${st.name}`, { stationId: st.id });
+          this.log('warning', `Station fermée par le régulateur : ${st.name}`, { stationId: st.id, kind: 'station.closed' });
         } else {
           if (!has) return { ok: false, error: "La station n'est pas fermée par la régulation" };
           list.splice(list.indexOf(st.id), 1);
-          this.log('success', `Station rouverte : ${st.name}`, { stationId: st.id });
+          this.log('success', `Station rouverte : ${st.name}`, { stationId: st.id, kind: 'station.opened' });
         }
         this.rebuildState();
         return { ok: true };
@@ -399,11 +403,11 @@ export class SimulationEngine {
         if (a.type === 'segment.disable') {
           if (has) return { ok: false, error: 'Tronçon déjà désactivé' };
           list.push(seg.id);
-          this.log('warning', `Tronçon désactivé : ${name}`, { segmentId: seg.id });
+          this.log('warning', `Tronçon désactivé : ${name}`, { segmentId: seg.id, kind: 'segment.closed' });
         } else {
           if (!has) return { ok: false, error: "Le tronçon n'est pas désactivé" };
           list.splice(list.indexOf(seg.id), 1);
-          this.log('success', `Tronçon réactivé : ${name}`, { segmentId: seg.id });
+          this.log('success', `Tronçon réactivé : ${name}`, { segmentId: seg.id, kind: 'segment.opened' });
         }
         this.rebuildState();
         return { ok: true };
@@ -429,16 +433,18 @@ export class SimulationEngine {
       customEffects: !!spec.effects,
       options: spec.options,
       origin: spec.origin ?? 'user',
+      ...(spec.surprise ? { surprise: true } : {}),
       history: [{ time: this.time, action: startTime > this.time ? `Programmé pour ${timeLabel(startTime)}` : 'Déclenché' }],
     };
     this.incidents.push(inc);
     if (inc.status === 'active') {
       this.log('critical', `Incident : ${inc.label} (gravité ${SEVERITY_LABELS[inc.severity].toLowerCase()})`, {
+        kind: 'incident.start',
         incidentId: inc.id,
         stationId: spec.target.kind === 'station' ? spec.target.stationId : undefined,
       });
-    } else {
-      this.log('info', `Incident programmé à ${timeLabel(startTime)} : ${inc.label}`, { incidentId: inc.id });
+    } else if (!spec.surprise) {
+      this.log('info', `Incident programmé à ${timeLabel(startTime)} : ${inc.label}`, { incidentId: inc.id, kind: 'incident.scheduled' });
     }
     if (rebuild) this.rebuildState();
     return inc;
@@ -464,6 +470,7 @@ export class SimulationEngine {
     this.edgeServedTick.fill(0);
 
     this.updateIncidents(dt);
+    this.updateServicePeriod(now);
 
     if (now - this.lastGeneration >= GENERATION_INTERVAL) {
       this.lastGeneration = now;
@@ -489,7 +496,7 @@ export class SimulationEngine {
     this.time += dt;
     this.tick++;
     if (Math.floor(this.time / 60) !== Math.floor(now / 60)) this.recordHistory();
-    if (this.finished) this.log('info', `Fin de la simulation (${timeLabel(this.time)})`);
+    if (this.finished) this.log('info', `Fin de la simulation (${timeLabel(this.time)})`, { kind: 'end' });
   }
 
   /** Avance de `seconds` secondes simulées. */
@@ -505,6 +512,7 @@ export class SimulationEngine {
         inc.status = 'active';
         inc.history.push({ time: this.time, action: 'Déclenché' });
         this.log('critical', `Incident : ${inc.label} (gravité ${SEVERITY_LABELS[inc.severity].toLowerCase()})`, {
+          kind: 'incident.start',
           incidentId: inc.id,
           stationId: inc.target.kind === 'station' ? inc.target.stationId : undefined,
         });
@@ -513,12 +521,31 @@ export class SimulationEngine {
         inc.elapsed += dt;
         if (inc.duration !== null && inc.elapsed >= inc.duration) {
           this.endIncident(inc, 'Fin de l’incident (durée écoulée)');
-          this.log('success', `Fin d'incident : ${inc.label}`, { incidentId: inc.id });
+          this.log('success', `Fin d'incident : ${inc.label}`, { incidentId: inc.id, kind: 'incident.end' });
           changed = true;
         }
       }
     }
     if (changed) this.rebuildState();
+  }
+
+  /** Changement de période de service (fermeture de nuit, heures creuses…) : fréquences recalculées. */
+  private updateServicePeriod(now: number) {
+    const idx = servicePeriodIndex(now);
+    if (idx === this.servicePeriod) return;
+    const before = SERVICE_PERIODS[this.servicePeriod];
+    const after = SERVICE_PERIODS[idx];
+    this.servicePeriod = idx;
+    this.rebuildState();
+    if (after.level === 0) this.log('info', 'Fin de service : le métro ferme pour la nuit', { kind: 'service' });
+    else if (before.level === 0) this.log('success', 'Ouverture du métro : premiers trains', { kind: 'service' });
+    else this.log('info', `${after.label} : fréquences à ${Math.round(after.level * 100)} % du programme`, { kind: 'service' });
+  }
+
+  /** Période de service en cours (libellé et niveau de fréquence). */
+  get service(): { label: string; level: number } {
+    const p = SERVICE_PERIODS[this.servicePeriod];
+    return { label: p.label, level: p.level };
   }
 
   private generateDemand(now: number) {
@@ -532,9 +559,11 @@ export class SimulationEngine {
       destFactor[i] = open ? this.state.stationDemandFactor[i] : 1;
     }
     const trips: GeneratedTrip[] = [];
-    this.demand.generate(this.rng, now, GENERATION_INTERVAL, this.config.demandScale, originFactor, trips);
-    this.demand.generateSurge(this.surgeRng, now, GENERATION_INTERVAL, this.config.demandScale, destFactor, trips);
-    for (const t of trips) this.startTrip(t, now);
+    // La nuit, aucun nouveau voyageur (les tirages sont consommés quand même : reproductibilité).
+    const scale = demandOpen(now) ? this.config.demandScale : 0;
+    this.demand.generate(this.rng, now, GENERATION_INTERVAL, scale, originFactor, trips);
+    this.demand.generateSurge(this.surgeRng, now, GENERATION_INTERVAL, scale, destFactor, trips);
+    for (const t of trips) if (t.size > 0) this.startTrip(t, now);
   }
 
   /** Station ouverte la plus proche (temps de référence), ou -1. */
@@ -1036,7 +1065,7 @@ export class SimulationEngine {
         this.log(
           'warning',
           `Saturation ${Math.round(sat * 100)} % — L${edge.line} ${net.stationById.get(edge.from)!.name} → ${net.stationById.get(edge.to)!.name}`,
-          { segmentId: net.segments[edge.segment].id },
+          { segmentId: net.segments[edge.segment].id, kind: 'alert.segment', line: edge.line },
         );
       } else if (this.edgeAlert[edge.index] && sat < 0.85) {
         this.edgeAlert[edge.index] = 0;
@@ -1046,7 +1075,7 @@ export class SimulationEngine {
       const load = this.stationWaiting[s.index] / s.capacity;
       if (!this.stationAlert[s.index] && load >= 1) {
         this.stationAlert[s.index] = 1;
-        this.log('warning', `Quais saturés à ${s.name} : ${Math.round(this.stationWaiting[s.index])} voyageurs en attente`, { stationId: s.id });
+        this.log('warning', `Quais saturés à ${s.name} : ${Math.round(this.stationWaiting[s.index])} voyageurs en attente`, { stationId: s.id, kind: 'alert.station' });
       } else if (this.stationAlert[s.index] && load < 0.7) {
         this.stationAlert[s.index] = 0;
       }
@@ -1182,6 +1211,7 @@ export class SimulationEngine {
       time: this.time,
       tick: this.tick,
       finished: this.finished,
+      service: this.service,
       edgeFlow: Float32Array.from(this.edgeFlow),
       edgeSaturation: Float32Array.from(this.edgeSaturation),
       edgeCapacity,

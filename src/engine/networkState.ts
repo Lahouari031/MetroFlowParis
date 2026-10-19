@@ -66,6 +66,8 @@ export function computeNetworkState(
   config: SimulationConfig,
   incidents: Incident[],
   version: number,
+  /** Niveau de service horaire (voir servicePeriods.ts) : multiplie toutes les fréquences. */
+  serviceLevel = 1,
 ): NetworkState {
   const S = network.stations.length;
   const G = network.segments.length;
@@ -196,10 +198,10 @@ export function computeNetworkState(
     const cycle = lineCycleSeconds(network, line.id, (i) => segTravel[i]);
     const fleetLimit = (fleet * 3600) / cycle;
     const programmed = Math.min(line.maxFrequency, (ctl?.frequency ?? line.baseFrequency) * config.regulation.globalFrequencyFactor);
-    const freq = Math.max(0, Math.min(programmed, fleetLimit) * lineFreqFactor[line.id]);
+    const freq = Math.max(0, Math.min(programmed * serviceLevel, fleetLimit) * lineFreqFactor[line.id]);
     lineFrequency[line.id] = freq;
     lineCapacity[line.id] = freq * line.trainCapacity;
-    lineTrains[line.id] = Math.min(fleet, trainsRequired(freq, cycle));
+    lineTrains[line.id] = Math.min(fleet, trainsRequired(freq, cycle)) || 0;
     lineFleetLimit[line.id] = fleetLimit;
     lineFleet[line.id] = fleet;
   }

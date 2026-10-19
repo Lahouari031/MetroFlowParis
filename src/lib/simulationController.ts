@@ -10,12 +10,13 @@
 import { loadNetwork } from '@/data/network';
 import { SCENARIO_BY_ID, SCENARIOS } from '@/data/scenarios';
 import { scenarioConfig } from '@/engine/defaults';
-import type { Network } from '@/types/network';
+import { generateRandomIncidents, type IncidentRate } from '@/engine/randomIncidents';
+import type { LineId, Network } from '@/types/network';
 import type { RecordedRun, RunSummary, SavedScenario, ScenarioDefinition, ScheduledIncident, ScoreResult } from '@/types/scenario';
 import type { ActionPayload, HistoryPoint, SimAction, SimulationConfig } from '@/types/simulation';
 import type { Incident } from '@/types/incident';
 import { useSettings } from '@/store/settingsStore';
-import { notify, useSimulation, type Speed } from '@/store/simulationStore';
+import { notify, useSimulation, type SimulationStore, type Speed } from '@/store/simulationStore';
 import type { VariantResult, Variant } from './comparison';
 import {
   loadProgress,
@@ -28,7 +29,8 @@ import {
   validateSavedScenario,
 } from './persistence';
 import { BASE_RATE, SimCore } from './simCore';
-import type { FromCore, ToCore } from './simProtocol';
+import type { FromCore, StatePatch, ToCore } from './simProtocol';
+import { fmtClock } from './metrics';
 import { createSimWorker } from './workerFactory';
 
 export { BASE_RATE };
@@ -49,6 +51,8 @@ class SimulationController {
   /** Configuration initiale (avant toute action du joueur) : base du rejeu et des sauvegardes. */
   private initialConfig: SimulationConfig | null = null;
   private scheduled: ScheduledIncident[] = [];
+  /** Titre d'une partie personnalisée (null = scénario prédéfini). */
+  private title: string | null = null;
   private initialized = false;
   private worker: Worker | null = null;
   private local: SimCore | null = null;
@@ -56,7 +60,7 @@ class SimulationController {
   private requestId = 0;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; onProgress?: (p: number) => void }>();
   /** Horloge pour l'animation : dernier temps reçu et instant de réception. */
-  private clock = { time: 0, receivedAt: 0, running: false, speed: 2 };
+  private clock = { time: 0, receivedAt: 0, running: false, speed: 1 };
   private lastVisual = 0;
   /** Le worker a-t-il déjà répondu (sinon, une erreur de chargement déclenche le repli local) ? */
   private workerAlive = false;
@@ -115,7 +119,7 @@ class SimulationController {
   private receive(msg: FromCore) {
     switch (msg.type) {
       case 'state':
-        useSimulation.setState(msg.patch);
+        useSimulation.setState(mergePatch(msg.patch));
         if (msg.clock) {
           this.clock = { ...msg.clock, receivedAt: performance.now() };
           if (!msg.clock.running) this.lastVisual = msg.clock.time;
@@ -163,7 +167,8 @@ class SimulationController {
     this.scheduled = structuredClone(scenario.incidents);
     this.initialConfig = { ...scenarioConfig(this.network, scenario), ...overrides };
     useSettings.getState().set('lastScenarioId', id);
-    this.announce(scenario.title);
+    this.title = null;
+    this.announce(scenario.title, null);
     this.send({
       type: 'load',
       config: this.initialConfig,
@@ -176,11 +181,57 @@ class SimulationController {
     if (announce) notify('info', `Scénario chargé : ${scenario.title}`);
   }
 
-  private announce(title: string) {
+  /**
+   * Partie personnalisée : horaires libres (jusqu'à 24 h), lignes gérées choisies par le joueur
+   * et incidents aléatoires sur ces lignes (tirés à partir de la graine : partie reproductible).
+   */
+  startCustomGame(opts: {
+    startTime: number;
+    duration: number;
+    seed: number;
+    demandScale: number;
+    lines: LineId[] | null;
+    incidentRate: IncidentRate;
+  }) {
+    const scenario = SCENARIO_BY_ID.get('libre');
+    if (!scenario || !this.network) return;
+    const lines = opts.lines && opts.lines.length > 0 && opts.lines.length < this.network.lines.length ? opts.lines : null;
+    this.scenario = scenario;
+    this.initialConfig = {
+      ...scenarioConfig(this.network, scenario),
+      seed: opts.seed,
+      demandScale: opts.demandScale,
+      startTime: opts.startTime,
+      duration: opts.duration,
+    };
+    this.scheduled = generateRandomIncidents(this.network, {
+      seed: opts.seed,
+      startTime: opts.startTime,
+      duration: opts.duration,
+      lines: lines ?? this.network.lines.map((l) => l.id),
+      rate: opts.incidentRate,
+    });
+    const span = `${fmtClock(opts.startTime)} → ${fmtClock(opts.startTime + opts.duration)}`;
+    this.title = `Ma partie — ${lines ? `ligne${lines.length > 1 ? 's' : ''} ${lines.join(', ')}` : 'tout le réseau'} · ${span}`;
+    this.announce(this.title, lines);
+    this.send({
+      type: 'load',
+      config: this.initialConfig,
+      scheduled: this.scheduled,
+      scenarioId: scenario.id,
+      actions: [],
+      referenceEnabled: useSettings.getState().referenceEnabled,
+      autoplay: false,
+    });
+    notify('info', `Nouvelle partie : ${this.scheduled.length} incident(s) imprévu(s) vous attendent`);
+  }
+
+  private announce(title: string, managedLines: LineId[] | null) {
     const cfg = this.initialConfig!;
     useSimulation.setState({
       scenarioId: this.scenario?.id ?? null,
       scenarioTitle: title,
+      managedLines,
       startTime: cfg.startTime,
       endTime: cfg.startTime + cfg.duration,
       seed: cfg.seed,
@@ -319,6 +370,8 @@ class SimulationController {
       scheduled: structuredClone(this.scheduled),
       actions: structuredClone(st.actions),
       savedTime: st.snapshot.time,
+      managedLines: st.managedLines,
+      title: this.title ?? undefined,
     };
     const saves = [...st.saves, save];
     const err = storeSavedScenarios(saves);
@@ -358,7 +411,8 @@ class SimulationController {
     this.scenario = save.baseScenarioId ? SCENARIO_BY_ID.get(save.baseScenarioId) ?? null : null;
     this.initialConfig = structuredClone(save.config);
     this.scheduled = structuredClone(save.scheduled);
-    this.announce(`${save.name}${this.scenario ? ` (${this.scenario.title})` : ''}`);
+    this.title = save.title ?? null;
+    this.announce(`${save.name}${save.title ? ` (${save.title})` : this.scenario ? ` (${this.scenario.title})` : ''}`, save.managedLines ?? null);
     this.send({
       type: 'load',
       config: this.initialConfig,
@@ -375,3 +429,21 @@ class SimulationController {
 }
 
 export const controller = new SimulationController();
+
+/** Applique un envoi incrémental des historiques (voir StatePatch). */
+function mergePatch(patch: StatePatch): Partial<SimulationStore> {
+  const { historyFrom, refHistoryFrom, ...rest } = patch;
+  const out: Partial<SimulationStore> = rest;
+  const cur = useSimulation.getState();
+  const join = <T,>(prev: T[] | null, next: T[], from: number): T[] => (from > 0 && prev ? prev.slice(0, from).concat(next) : next);
+  if (historyFrom !== undefined) {
+    if (rest.history) out.history = join(cur.history, rest.history, historyFrom);
+    if (rest.segmentSeries) out.segmentSeries = join(cur.segmentSeries, rest.segmentSeries, historyFrom);
+    if (rest.stationSeries) out.stationSeries = join(cur.stationSeries, rest.stationSeries, historyFrom);
+  }
+  if (refHistoryFrom !== undefined) {
+    if (rest.refHistory) out.refHistory = join(cur.refHistory, rest.refHistory, refHistoryFrom);
+    if (rest.refSegmentSeries) out.refSegmentSeries = join(cur.refSegmentSeries, rest.refSegmentSeries, refHistoryFrom);
+  }
+  return out;
+}

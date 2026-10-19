@@ -1,11 +1,12 @@
 'use client';
 
-import { BarChart3, ChevronLeft, ChevronRight, Lock, Siren, SlidersHorizontal, Unlock } from 'lucide-react';
+import { BarChart3, Gamepad2, Radio, ChevronLeft, ChevronRight, Lock, Siren, SlidersHorizontal, Unlock } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { loadNetwork } from '@/data/network';
 import { describeTarget } from '@/engine/incidentManager';
 import { fmtInt, fmtMin } from '@/lib/metrics';
 import { controller } from '@/lib/simulationController';
+import { useSettings } from '@/store/settingsStore';
 import { useSelection, useSimulation } from '@/store/simulationStore';
 import { DualSeriesChart, LineSaturationChart, StationRanking, TimeSeriesChart } from '../dashboard/charts';
 import { KPIGrid } from '../dashboard/KPIGrid';
@@ -14,8 +15,10 @@ import { MetroMap } from '../map/MetroMap';
 import { IncidentFormModal } from '../simulation/IncidentForm';
 import { IncidentList } from '../simulation/IncidentList';
 import { NetworkControls } from '../simulation/NetworkControls';
+import { openNewGame } from '../scenarios/NewGameModal';
 import { Button, cx, Segmented } from '../ui/primitives';
 import { networkStatus } from './TopBar';
+import { FeedPanel, FeedUnread } from './TrafficFeed';
 
 /**
  * Écran principal : le plan occupe tout l'espace ; commandes et indicateurs flottent
@@ -46,7 +49,15 @@ export function MapDashboard() {
           >
             <IncidentList />
           </Card>
-          <Card title="Lignes et rames" icon={<SlidersHorizontal size={12} />}>
+          <Card
+            title="Lignes et rames"
+            icon={<SlidersHorizontal size={12} />}
+            actions={
+              <Button size="xs" variant="ghost" onClick={openNewGame} title="Nouvelle partie : choisir mes lignes, mes horaires…">
+                <Gamepad2 size={11} /> Mes lignes
+              </Button>
+            }
+          >
             <NetworkControls />
           </Card>
           <ManualClosures />
@@ -69,6 +80,9 @@ export function MapDashboard() {
           )}
           <Card title="Indicateurs simulés" actions={<DockToggle side="right" onClick={() => setRightOpen(false)} />}>
             <KPIGrid compact />
+          </Card>
+          <Card title="Info trafic" icon={<Radio size={12} />} actions={<FeedUnread />}>
+            <FeedPanel />
           </Card>
           <ChartsCard />
         </aside>
@@ -110,6 +124,9 @@ function DockToggle({ side, onClick }: { side: 'left' | 'right'; onClick: () => 
 /** Bandeau d'état minimal en bas du plan : l'essentiel en un coup d'œil. */
 function StatusStrip({ leftOffset }: { leftOffset: number }) {
   const k = useSimulation((s) => s.snapshot?.kpis);
+  const managed = useSimulation((s) => s.managedLines);
+  const segSat = useSimulation((s) => s.snapshot?.segmentSaturation);
+  const red = useSettings((s) => s.thresholds[2]);
   if (!k) return null;
   const status = networkStatus(k);
   const items: [string, string][] = [
@@ -118,6 +135,12 @@ function StatusStrip({ leftOffset }: { leftOffset: number }) {
     ['Tronçons saturés', fmtInt(k.saturatedSegments)],
     ['Qualité', `${fmtInt(k.serviceQuality)}/100`],
   ];
+  if (managed && segSat) {
+    const network = loadNetwork().network!;
+    let n = 0;
+    for (const seg of network.segments) if (managed.includes(seg.line) && segSat[seg.index] >= red) n++;
+    items.splice(2, 1, ['Saturés sur mes lignes', fmtInt(n)]);
+  }
   return (
     <div className="pointer-events-none absolute bottom-3 flex justify-center" style={{ left: leftOffset, right: 324 }}>
       <div className="pointer-events-auto flex items-center gap-4 rounded-full border border-edge bg-white/95 px-4 py-1.5 text-xs shadow-sm backdrop-blur">

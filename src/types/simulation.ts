@@ -79,8 +79,27 @@ export type SimAction = ActionPayload & { time: number };
 
 export type EventLevel = 'info' | 'warning' | 'critical' | 'success';
 
+export type SimEventKind =
+  | 'incident.start'
+  | 'incident.end'
+  | 'incident.update'
+  | 'incident.scheduled'
+  | 'regulation'
+  | 'station.closed'
+  | 'station.opened'
+  | 'segment.closed'
+  | 'segment.opened'
+  | 'service'
+  | 'alert.segment'
+  | 'alert.station'
+  | 'end';
+
 export interface SimEvent {
   id: number;
+  /** Nature de l'événement (sert au fil d'info trafic). */
+  kind?: SimEventKind;
+  /** Ligne concernée (régulation, alertes). */
+  line?: LineId;
   time: number;
   level: EventLevel;
   message: string;
@@ -151,6 +170,8 @@ export interface SimSnapshot {
   time: number;
   tick: number;
   finished: boolean;
+  /** Période de service horaire (fermeture de nuit, heures creuses…). */
+  service: { label: string; level: number };
   /** Par arc orienté. */
   edgeFlow: Float32Array;
   edgeSaturation: Float32Array;

@@ -72,6 +72,8 @@ export interface Incident {
   customEffects: boolean;
   options?: { stopTraffic?: boolean };
   origin: 'user' | 'scenario';
+  /** Incident imprévu (partie libre) : masqué tant qu'il est seulement programmé. */
+  surprise?: boolean;
   history: IncidentHistoryEntry[];
   /** Heure de fin effective (levée ou expiration). */
   endTime?: number;
@@ -92,4 +94,11 @@ export interface IncidentSpec {
   /** Options spécifiques (fermeture : arrêt de la circulation, etc.). */
   options?: { stopTraffic?: boolean };
   origin?: 'user' | 'scenario';
+  /** Incident imprévu : invisible pour le joueur tant qu'il n'a pas commencé. */
+  surprise?: boolean;
+}
+
+/** Vrai si l'incident ne doit pas encore être montré au joueur (imprévu pas encore déclenché). */
+export function isHiddenIncident(inc: Incident): boolean {
+  return !!inc.surprise && inc.status === 'scheduled';
 }

@@ -1,12 +1,13 @@
 'use client';
 
-import { BarChart3, Map as MapIcon, Pause, Play, Save, Trophy, Layers3 } from 'lucide-react';
+import { BarChart3, Clock3, Gamepad2, Layers3, Map as MapIcon, Moon, Pause, Play, Save, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { controller } from '@/lib/simulationController';
 import { fmtClock } from '@/lib/metrics';
 import { useSimulation, type Speed } from '@/store/simulationStore';
+import { openNewGame } from '../scenarios/NewGameModal';
 import { Button, cx, Modal, Segmented } from '../ui/primitives';
 
 const NAV = [
@@ -16,7 +17,13 @@ const NAV = [
   { href: '/defis', label: 'Défis', icon: Trophy },
 ];
 
-export const SPEEDS: Speed[] = [1, 2, 5, 10];
+export const SPEEDS: Speed[] = [0.25, 0.5, 1, 2, 5, 10, 20];
+
+/** Libellé court d'une vitesse (×¼, ×½, ×1…). */
+export const speedLabel = (s: number) => `×${s === 0.25 ? '¼' : s === 0.5 ? '½' : s}`;
+
+/** Info-bulle : temps simulé par seconde réelle. */
+export const speedTitle = (s: number) => (s < 1 ? `${s * 60} s simulées par seconde` : `${s} min simulée(s) par seconde`);
 
 export function networkStatus(k: { activeIncidents: number; saturatedSegments: number; serviceQuality: number } | undefined) {
   if (!k) return { label: '—', color: 'text-muted', dot: 'bg-slate-500' };
@@ -42,10 +49,10 @@ export function TopBar() {
       <Link href="/" className="flex items-center gap-2.5 pr-2">
         <Logo />
         <div className="leading-tight">
-          <div className="text-[15px] font-bold tracking-tight">
+          <div className="whitespace-nowrap text-[15px] font-bold tracking-tight">
             MétroFlow <span className="text-accent">Paris</span>
           </div>
-          <div className="hidden text-[10px] text-muted xl:block">Anticipez. Régulez. Maîtrisez le réseau.</div>
+          <div className="hidden text-[10px] text-muted 2xl:block">Anticipez. Régulez. Maîtrisez le réseau.</div>
         </div>
       </Link>
 
@@ -74,6 +81,9 @@ export function TopBar() {
 
       {ready && (
         <div className="ml-auto flex items-center gap-3">
+          <Button variant="primary" onClick={openNewGame} title="Choisir les horaires (jusqu'à 24 h), vos lignes et les incidents imprévus">
+            <Gamepad2 size={14} /> <span className="hidden whitespace-nowrap lg:inline">Nouvelle partie</span>
+          </Button>
           <div className={cx('flex items-center gap-1.5 rounded-md border border-edge px-2 py-1 text-xs', status.color)} title="État du réseau simulé (qualité de service et incidents actifs)">
             <span className={cx('h-2 w-2 rounded-full', status.dot, status.label !== 'Nominal' && 'animate-pulse')} />
             <span className="hidden sm:inline">Réseau</span> {status.label}
@@ -81,6 +91,7 @@ export function TopBar() {
           <div className="tabular rounded-md bg-panel-3 px-2.5 py-1 font-mono text-base font-semibold tracking-wider" title="Horloge de simulation (temps simulé)">
             {fmtClock(time, true)}
           </div>
+          <ServiceBadge />
           <Button
             variant={running ? 'subtle' : 'primary'}
             onClick={() => controller.toggle()}
@@ -93,7 +104,7 @@ export function TopBar() {
           <Segmented
             value={speed}
             onChange={(v) => controller.setSpeed(v)}
-            options={SPEEDS.map((s) => ({ value: s, label: `×${s}`, title: `${s} min simulée(s) par seconde` }))}
+            options={SPEEDS.map((s) => ({ value: s, label: speedLabel(s), title: speedTitle(s) }))}
           />
           <Button variant="ghost" onClick={() => setSaveOpen(true)} title="Sauvegarder le scénario en cours">
             <Save size={14} />
@@ -138,5 +149,25 @@ function Logo() {
       <circle cx="20" cy="10" r="2.2" fill="#FA9ABA" />
       <circle cx="16" cy="18" r="2.2" fill="#2563eb" />
     </svg>
+  );
+}
+
+/** Période de service horaire (affichée hors pointe) et jour de simulation. */
+function ServiceBadge() {
+  const service = useSimulation((s) => s.snapshot?.service);
+  const time = useSimulation((s) => s.snapshot?.time ?? 0);
+  const start = useSimulation((s) => s.startTime);
+  const day = Math.floor(time / 86400) - Math.floor(start / 86400);
+  if (!service || (service.level === 1 && day === 0)) return null;
+  const closed = service.level === 0;
+  return (
+    <div
+      className={cx('hidden items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium xl:flex', closed ? 'bg-slate-800 text-white' : 'bg-panel-3 text-muted')}
+      title={closed ? 'Métro fermé : le temps défile en accéléré jusqu’à la réouverture' : `Fréquences à ${Math.round(service.level * 100)} % du programme (horaires de service)`}
+    >
+      {closed ? <Moon size={12} /> : <Clock3 size={12} />}
+      {service.label}
+      {day > 0 && <span className="ml-1 rounded bg-accent/15 px-1 text-accent">J+{day}</span>}
+    </div>
   );
 }

@@ -23,6 +23,8 @@ const LOOP_MS = 8;
 const STEP_BUDGET_MS = 30;
 const PUBLISH_INTERVAL_MS = 125;
 const HISTORY_PUBLISH_INTERVAL_MS = 500;
+/** Quand le métro est fermé (nuit), le temps défile au moins à cette vitesse. */
+const NIGHT_SPEED = 60;
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const sleep = () => new Promise((r) => setTimeout(r, 0));
@@ -36,7 +38,7 @@ export class SimCore {
   private scenarioId: string | null = null;
   private referenceEnabled = true;
   private running = false;
-  private speed = 2;
+  private speed = 1;
   private accumulator = 0;
   private lastLoop = 0;
   private lastPublish = 0;
@@ -48,6 +50,8 @@ export class SimCore {
   private busyToken = 0;
   private busy = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** Historiques déjà transmis (envoi incrémental : seuls les nouveaux points partent). */
+  private sent = { engine: null as SimulationEngine | null, reference: null as SimulationEngine | null, history: 0, refHistory: 0 };
 
   constructor(private readonly post: (msg: FromCore) => void) {
     const { network } = loadNetwork();
@@ -146,7 +150,7 @@ export class SimCore {
     const t = now();
     const realDt = Math.min(0.25, (t - this.lastLoop) / 1000);
     this.lastLoop = t;
-    this.accumulator += realDt * BASE_RATE * this.speed;
+    this.accumulator += realDt * BASE_RATE * this.rate(engine);
     const step = engine.config.stepSeconds;
     while (this.accumulator >= step && !engine.finished) {
       engine.step();
@@ -173,6 +177,11 @@ export class SimCore {
     this.timer = setTimeout(this.loop, LOOP_MS);
   };
 
+  /** Vitesse appliquée : la nuit (métro fermé), le temps est accéléré. */
+  private rate(engine: SimulationEngine): number {
+    return engine.service.level === 0 ? Math.max(this.speed, NIGHT_SPEED) : this.speed;
+  }
+
   private afterReset() {
     this.accumulator = 0;
     this.resultSent = this.engine?.finished ?? false;
@@ -195,13 +204,22 @@ export class SimCore {
     };
     if (force || t - this.lastHistoryPublish >= HISTORY_PUBLISH_INTERVAL_MS) {
       this.lastHistoryPublish = t;
-      patch.history = [...engine.history];
-      patch.refHistory = this.reference ? [...this.reference.history] : null;
-      patch.segmentSeries = engine.segmentSeries;
-      patch.stationSeries = engine.stationSeries;
-      patch.refSegmentSeries = this.reference ? this.reference.segmentSeries : null;
+      const sent = this.sent;
+      if (sent.engine !== engine || sent.history > engine.history.length) sent.history = 0;
+      if (sent.reference !== this.reference || (this.reference && sent.refHistory > this.reference.history.length)) sent.refHistory = 0;
+      sent.engine = engine;
+      sent.reference = this.reference;
+      patch.historyFrom = sent.history;
+      patch.history = engine.history.slice(sent.history);
+      patch.segmentSeries = engine.segmentSeries.slice(sent.history);
+      patch.stationSeries = engine.stationSeries.slice(sent.history);
+      sent.history = engine.history.length;
+      patch.refHistoryFrom = sent.refHistory;
+      patch.refHistory = this.reference ? this.reference.history.slice(sent.refHistory) : null;
+      patch.refSegmentSeries = this.reference ? this.reference.segmentSeries.slice(sent.refHistory) : null;
+      sent.refHistory = this.reference ? this.reference.history.length : 0;
     }
-    this.post({ type: 'state', patch, clock: { time: engine.time, running: this.running, speed: this.speed } });
+    this.post({ type: 'state', patch, clock: { time: engine.time, running: this.running, speed: this.rate(engine) } });
   }
 
   private notice(level: 'info' | 'error' | 'success', message: string) {
@@ -285,15 +303,28 @@ export class SimCore {
   private onFinished() {
     if (this.resultSent) return;
     this.resultSent = true;
-    const result = this.computeResult();
-    if (result) this.post({ type: 'result', result, scenarioId: this.scenarioId });
+    void this.computeResult().then((result) => {
+      if (result) this.post({ type: 'result', result, scenarioId: this.scenarioId });
+    });
   }
 
-  private computeResult() {
+  private async computeResult() {
     const engine = this.engine;
     if (!engine || !this.config) return null;
     // Budget et résorption : par rapport à la simulation nominale (même graine, sans incident ni action).
-    const nominal = replaySimulation(this.network, this.config, [], [], engine.time, { quiet: true });
+    // Calculée par tranches pour rester réactif sur les longues parties (jusqu'à 24 h).
+    const nominal = new SimulationEngine(this.network, this.config, [], { quiet: true });
+    const from = nominal.time;
+    const long = engine.time - from > 4 * 3600;
+    while (nominal.time < engine.time - 1e-9) {
+      nominal.advance(Math.min(1800, engine.time - nominal.time));
+      if (long) {
+        this.post({ type: 'state', patch: { busy: { label: 'Calcul du bilan…', progress: (nominal.time - from) / Math.max(1, engine.time - from) } } });
+        await sleep();
+      }
+    }
+    if (long) this.post({ type: 'state', patch: { busy: null } });
+    if (engine !== this.engine) return null;
     const summary = summarizeRun({
       history: engine.history,
       kpis: engine.computeKPIs(),
@@ -317,7 +348,7 @@ export class SimCore {
             referenceHistory: this.reference?.history ?? null,
             incidents: engine.incidents,
             actions: engine.actions,
-            summary: this.computeResult()?.summary,
+            summary: (await this.computeResult())?.summary,
           };
         }
       } else if (kind === 'route') {

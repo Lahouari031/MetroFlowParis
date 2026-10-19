@@ -108,13 +108,19 @@ Voyageurs dont l'origine ou la destination est fermée : report vers la station 
 - Médaille seulement si tous les objectifs principaux sont atteints : or ≥ 850, argent ≥ 700, bronze sinon.
 - Les objectifs de chaque défi ont été calibrés par simulation : sans régulation, au moins un objectif principal échoue ; une stratégie de régulation de référence réussit (vérifié par `tests/scoring.test.ts`).
 
-## 8. Exécution et représentation
+## 8. Horaires de service, parties libres, fil d'info trafic
+
+- **Horaires de service** (`servicePeriods.ts`, valeurs de modèle) : 5 h 30–6 h 30 début de service (fréquences ×0,6), 6 h 30–10 h pointe (×1), 10 h–16 h heures creuses (×0,8), 16 h–20 h 30 pointe (×1), 20 h 30–1 h 15 soirée (×0,55), **1 h 15–5 h 30 métro fermé**. Le niveau de service multiplie la fréquence programmée (y compris celle réglée par le joueur). Aucun nouveau voyageur n'entre entre 0 h 40 et 5 h 30 ; les voyageurs encore à bord à la fermeture sont comptés « sans itinéraire » (quelques centaines). Pendant la fermeture, le temps simulé défile au moins à ×60.
+- **Incidents aléatoires** (`randomIncidents.ts`) : processus de Poisson de taux `r × √(nombre de lignes gérées)` par heure (r = 0,15 / 0,3 / 0,6 selon le réglage), hors fermeture et hors dernier quart d'heure ; type, gravité (45 / 38 / 17 %), lieu et durée (10–40 min) tirés avec un générateur dédié initialisé par la graine. Ils sont marqués « imprévus » et masqués tant qu'ils ne sont pas déclenchés.
+- **Fil d'info trafic** (`lib/trafficFeed.ts`) : chaque événement du moteur porte une nature (`incident.start`, `incident.end`, `service`, `alert.station`…) ; le fil la traduit en message court (lieu, heure de reprise estimée = début + durée prévue, lignes de délestage = autres lignes des stations touchées). Les alertes d'affluence sont limitées à une par station ou par ligne toutes les 30 min simulées.
+
+## 9. Exécution et représentation
 
 - Le moteur tourne dans un **Web Worker** (`src/lib/simulation.worker.ts` → `SimCore`) : la simulation du joueur et la référence avancent hors du fil d'affichage, qui reçoit des instantanés ~8 fois par seconde. Si le worker ne peut pas être créé (page ouverte en `file://`, navigateur restrictif), le même `SimCore` tourne dans le fil principal.
 - **Rames animées** : le modèle reste macroscopique. Les rames dessinées sont une *représentation* : pour chaque ligne et chaque sens, des services terminus → terminus espacés selon la fréquence effective et avançant selon le temps de parcours effectif de chaque tronçon (ralentissements visibles). Le remplissage d'une rame (partie blanche = places libres) reflète le taux de charge simulé du tronçon, pas un comptage individuel.
 - **Voyageurs à quai** : les points autour d'une station figurent la file d’attente (1 point ≈ 60 voyageurs, 12 au maximum) ; un anneau rouge signale un quai saturé.
 
-## 9. Limites connues
+## 10. Limites connues
 
 - **Demande synthétique** : aucune donnée de fréquentation réelle ; les volumes absolus et la répartition géographique ne doivent pas être interprétés comme des mesures.
 - **Métro seul** : les 16 lignes sont modélisées, mais ni le RER, ni le tramway, ni le bus : les reports vers ces modes ne sont pas représentés, ce qui surestime la charge de certaines lignes de métro (par ex. ligne 13 ou ligne 4 lors d'une coupure).

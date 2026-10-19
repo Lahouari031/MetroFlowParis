@@ -176,3 +176,23 @@ textarea:focus-visible {
 .glow-selected {
   filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.9));
 }
+
+/* Notifications du fil d'info trafic */
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.feed-toast {
+  animation: feed-in 260ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .feed-toast {
+    animation: none;
+  }
+}

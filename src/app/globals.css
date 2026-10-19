@@ -1,0 +1,151 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-night: #060a13;
+  --color-panel: #0d1524;
+  --color-panel-2: #111c2f;
+  --color-panel-3: #17243a;
+  --color-edge: #1f2d45;
+  --color-edge-strong: #2b3d5c;
+  --color-ink: #e6edf7;
+  --color-muted: #8a9bb5;
+  --color-faint: #5b6b85;
+  --color-accent: #38bdf8;
+  --color-accent-strong: #0ea5e9;
+  --color-ok: #22c55e;
+  --color-warn: #eab308;
+  --color-high: #f97316;
+  --color-bad: #ef4444;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-night);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2b3d5c transparent;
+}
+
+.panel-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Champs de saisie */
+input[type='range'] {
+  accent-color: var(--color-accent);
+  height: 4px;
+}
+
+input[type='number'],
+input[type='text'],
+input[type='time'],
+select,
+textarea {
+  background: var(--color-panel-3);
+  border: 1px solid var(--color-edge-strong);
+  border-radius: 6px;
+  color: var(--color-ink);
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Carte */
+.map-label {
+  paint-order: stroke;
+  stroke: #060a13;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  fill: #cfd8e6;
+  font-size: 9px;
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+.map-label-strong {
+  fill: #f1f5fb;
+  font-weight: 650;
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.flow-particles {
+  animation: flow-dash linear infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+.incident-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes over-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.over-capacity {
+  animation: over-blink 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-particles,
+  .incident-pulse,
+  .over-capacity {
+    animation: none;
+  }
+}
+
+.glow-selected {
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.9));
+}

@@ -12,9 +12,10 @@ Le moteur (`src/engine/`) est écrit en TypeScript pur, sans dépendance à Reac
 
 ## 2. Demande synthétique (`demandGenerator.ts`)
 
-- Volume total : `210 000 entrées/h × profil(heure) × multiplicateur de demande`. Le profil horaire est interpolé entre des points fixes (creux de nuit, montée 6–8 h, pointe 8 h 30, creux de journée, pointe 18 h 15, soirée).
+- Volume total : `420 000 entrées/h × profil(heure) × multiplicateur de demande`. Le profil horaire est interpolé entre des points fixes (creux de nuit, montée 6–8 h, pointe 8 h 30, creux de journée, pointe 18 h 15, soirée).
 - Trois motifs pondérés selon l'heure : domicile → travail (gaussienne centrée sur 8 h 30), travail → domicile (18 h), autres déplacements (constant).
-- Émission d'une station ∝ poids résidentiel (matin) / emplois (soir) / moyenne (autres) × bonus de correspondance.
+- Poids des stations (synthétiques) : décroissance avec la distance au centre des affaires (≈ Opéra–Bourse), bonus d'emploi pour quelques pôles (La Défense, gares, Bercy…).
+- Émission d'une station ∝ poids résidentiel (matin) / emplois (soir) / moyenne (autres) × facteur de pôle `√(capacité offerte / 17 000)` borné à [0,45 ; 2,2] (+0,3 pour les grandes gares) : une station desservie par plusieurs lignes lourdes attire davantage.
 - Destination : modèle gravitaire `attractivité × exp(−temps / 25 min)`, trajets de moins de 5 min fortement réduits.
 - Génération chaque minute simulée, en « cohortes » (groupes de voyageurs de taille réelle, éventuellement fractionnaire).
 - **Reproductibilité** : générateur mulberry32 initialisé par la graine. Le moteur consomme toujours le même nombre de tirages par minute, quel que soit l'état du réseau ; l'affluence exceptionnelle utilise un flux aléatoire séparé. Deux simulations de même graine reçoivent donc exactement la même demande, ce qui permet de comparer des stratégies.
@@ -22,9 +23,9 @@ Le moteur (`src/engine/`) est écrit en TypeScript pur, sans dépendance à Reac
 
 ## 3. Affectation des itinéraires (`passengerAssignment.ts`)
 
-- Pour chaque origine, trois arbres de plus courts chemins : profil standard, « évitement de la congestion » (encombrement ×4), « moins de correspondances » (pénalité 480 s).
+- Pour chaque origine, deux arbres de plus courts chemins : profil standard et « évitement de la congestion » (encombrement ×4, correspondances moins pénalisées).
 - Les itinéraires distincts sont évalués au coût standard ; ceux qui dépassent `1,35 × coût minimal + 240 s` sont écartés ; les autres sont répartis par un **logit** de paramètre θ = 240 s ; les parts < 5 % sont supprimées.
-- Les arbres sont recalculés immédiatement après tout changement d'état du réseau (incident, fermeture, fréquence), et rafraîchis toutes les 5 minutes simulées pour tenir compte de l'encombrement.
+- Les arbres sont recalculés immédiatement après tout changement d'état du réseau (incident, fermeture, fréquence), et rafraîchis en continu pour tenir compte de l'encombrement : quelques origines par pas, de sorte que toutes soient recalculées en 15 minutes simulées (lissage de la charge de calcul).
 - **Recalcul des voyageurs déjà en route** : après un changement, chaque cohorte à quai vérifie son itinéraire restant ; s'il est devenu impossible, ou s'il coûte plus que `meilleur + max(300 s, 20 %)`, elle change d'itinéraire. Les cohortes en train sont vérifiées à la station suivante. Une cohorte qui attend plus de 10 minutes (refus d'embarquement) cherche aussi une alternative.
 
 ## 4. Dynamique (`simulationEngine.ts`)
@@ -58,6 +59,7 @@ Fréquence effective : `min(fréquence programmée × facteur global, fréquence
 | Retard moyen | moyenne pondérée, sur ~10 min, de `durée réelle − durée de référence` des trajets terminés ; la référence est le plus rapide trajet en conditions nominales |
 | Attente moyenne | attente à quai avant embarquement (½ intervalle + refus), moyenne glissante 10 min |
 | Voyageurs affectés | voyageurs ayant subi un incident : tronçon ou station perturbés, itinéraire recalculé, report vers une autre station, renoncement |
+| Retard des voyageurs affectés | retard moyen des seuls trajets terminés par des voyageurs affectés (utilisé par certains objectifs) |
 | Qualité de service | `100 − 50·min(1, retard/10 min) − 30·min(1, 3·part de tronçons saturés) − 20·min(1, attente/10 min)` |
 | Coût opérationnel | rames en service × 0,6 k€/h + 4 k€ par rame de réserve mobilisée (fictif) |
 
@@ -74,7 +76,7 @@ Chaque incident est converti en **effets élémentaires explicites**, visibles e
 
 | Type | Effets |
 |---|---|
-| Malaise voyageur | +60 / 150 / 300 s de parcours et capacité ×0,85 / 0,6 / 0,35 sur les tronçons adjacents ; fréquence de la ligne ×0,9 en gravité élevée. La station **reste ouverte**. |
+| Malaise voyageur | +60 / 180 / 420 s de parcours et capacité ×0,85 / 0,55 / 0,25 sur les tronçons adjacents ; fréquence de la ligne ×0,92 / ×0,8 en gravité moyenne / élevée. La station **reste ouverte**. |
 | Fermeture de station | station fermée (pas d'entrée, sortie, correspondance) ; trains sans arrêt, ou circulation interrompue en option. Les voyageurs à quai sont évacués vers la station ouverte la plus proche (6 min de marche). |
 | Interruption de tronçon | tronçon retiré du graphe |
 | Panne technique | temps ×1,3 / 1,6 / 2,2 et capacité ×0,75 / 0,5 / 0,3 |
@@ -83,9 +85,9 @@ Chaque incident est converti en **effets élémentaires explicites**, visibles e
 | Retard important | +180 / 360 / 600 s et capacité ×0,7 / 0,5 / 0,35, rayon 2 par défaut |
 | Affluence exceptionnelle | demande émise et attirée ×2 / 4 / 8 (station) et atténuée autour |
 | Incident de correspondance | correspondances +180 / 420 s, ou impossibles (gravité élevée) |
-| Retour à la normale | lève les incidents actifs de la cible |
+| Retour à la normale | lève les incidents actifs de la cible créés par le joueur |
 
-Cycle de vie : programmé → actif → (suspendu ↔ actif) → levé (durée écoulée ou levée manuelle), avec historique horodaté. Les incidents peuvent être prolongés et leur gravité modifiée.
+Cycle de vie : programmé → actif → (suspendu ↔ actif) → levé (durée écoulée ou levée manuelle), avec historique horodaté. Les incidents créés par le joueur peuvent être suspendus, prolongés, levés et leur gravité modifiée. Les incidents **imposés par un scénario** ne peuvent qu'être prolongés : le joueur doit en gérer les conséquences (régulation), pas les annuler.
 
 Voyageurs dont l'origine ou la destination est fermée : report vers la station ouverte la plus proche (≤ 15 min). S'il n'existe plus aucun itinéraire dans le réseau simulé, le voyageur est compté comme « sans itinéraire » (report hors métro).
 
@@ -102,17 +104,23 @@ Voyageurs dont l'origine ou la destination est fermée : report vers la station 
 - Interpolation linéaire, total = Σ sous-score × poids / 10 (sur 1000).
 - Difficulté : seuils (hors coût) × 1,3 en facile, × 0,75 en difficile.
 - Budget = coût de la simulation nominale × (1 + marge du scénario).
-- « Congestion résorbée » : minutes entre la fin du dernier incident et le premier instant où les tronçons saturés ≤ nominal + 2 et les voyageurs à quai ≤ nominal × 1,1 + 300.
+- « Congestion résorbée » : minutes entre la fin du dernier incident et le premier instant où les tronçons saturés ≤ nominal + 1 et les voyageurs à quai ≤ nominal × 1,03 + 200.
 - Médaille seulement si tous les objectifs principaux sont atteints : or ≥ 850, argent ≥ 700, bronze sinon.
 - Les objectifs de chaque défi ont été calibrés par simulation : sans régulation, au moins un objectif principal échoue ; une stratégie de régulation de référence réussit (vérifié par `tests/scoring.test.ts`).
 
-## 8. Limites connues
+## 8. Exécution et représentation
+
+- Le moteur tourne dans un **Web Worker** (`src/lib/simulation.worker.ts` → `SimCore`) : la simulation du joueur et la référence avancent hors du fil d'affichage, qui reçoit des instantanés ~8 fois par seconde. Si le worker ne peut pas être créé (page ouverte en `file://`, navigateur restrictif), le même `SimCore` tourne dans le fil principal.
+- **Rames animées** : le modèle reste macroscopique. Les rames dessinées sont une *représentation* : pour chaque ligne et chaque sens, des services terminus → terminus espacés selon la fréquence effective et avançant selon le temps de parcours effectif de chaque tronçon (ralentissements visibles). Le remplissage d'une rame (partie blanche = places libres) reflète le taux de charge simulé du tronçon, pas un comptage individuel.
+- **Voyageurs à quai** : les points autour d'une station figurent la file d’attente (1 point ≈ 60 voyageurs, 12 au maximum) ; un anneau rouge signale un quai saturé.
+
+## 9. Limites connues
 
 - **Demande synthétique** : aucune donnée de fréquentation réelle ; les volumes absolus et la répartition géographique ne doivent pas être interprétés comme des mesures.
-- **Sous-réseau** : 5 lignes sur 16 ; les voyageurs ne peuvent pas emprunter les lignes non modélisées, ce qui surestime la charge de certaines alternatives et peut créer des voyageurs « sans itinéraire » (par ex. si la ligne 4 est coupée au nord).
-- **Modèle macroscopique** : pas de trains individuels ni d'horaires ; la capacité est un débit continu. Les branches de la ligne 7 sont modélisées par une part de service (½) ; l'attente d'un train d'une branche donnée sur le tronc commun est approximée.
+- **Métro seul** : les 16 lignes sont modélisées, mais ni le RER, ni le tramway, ni le bus : les reports vers ces modes ne sont pas représentés, ce qui surestime la charge de certaines lignes de métro (par ex. ligne 13 ou ligne 4 lors d'une coupure).
+- **Modèle macroscopique** : pas de trains individuels ni d'horaires ; la capacité est un débit continu. Les branches (lignes 7, 13) sont modélisées par une part de service (½) ; l'attente d'un train d'une branche donnée sur le tronc commun est approximée. Les boucles à sens unique (ligne 10 à Auteuil, 7bis à Pré-Saint-Gervais) sont simulées dans les deux sens.
 - Les voyageurs à bord sont toujours prioritaires ; la sortie des voyageurs ne libère pas de capacité « au quai » (la capacité est celle du tronçon).
 - Pas de choix de mode (bus, RER, marche longue), pas d'élasticité de la demande aux perturbations, sauf report vers une station voisine.
 - Temps de parcours dérivés du schéma (sauf exceptions saisies) : ordres de grandeur.
 - Le rafraîchissement des itinéraires selon l'encombrement (toutes les 5 min) peut produire de légères oscillations entre alternatives.
-- Le moteur tourne dans le fil principal du navigateur : aux vitesses élevées, si le calcul dépasse le budget d'une image, la vitesse effective (affichée) devient inférieure à la vitesse demandée.
+- Aux vitesses élevées, si le calcul dépasse le temps disponible, la vitesse effective (affichée) devient inférieure à la vitesse demandée (en particulier sans Web Worker).

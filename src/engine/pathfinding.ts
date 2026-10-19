@@ -35,7 +35,6 @@ export interface CostProfile {
 export const PROFILES: CostProfile[] = [
   { name: 'standard', waitWeight: 1.5, transferPenalty: 120, crowdWeight: 1 },
   { name: 'évitement de la congestion', waitWeight: 1.5, transferPenalty: 60, crowdWeight: 4 },
-  { name: 'moins de correspondances', waitWeight: 1.5, transferPenalty: 480, crowdWeight: 1 },
 ];
 
 /** Profil « temps pur » : sert au temps de trajet de référence (calcul des retards). */

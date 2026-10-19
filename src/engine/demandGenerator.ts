@@ -12,7 +12,7 @@ import type { Network } from '@/types/network';
 import { Rng, sampleCdf } from './rng';
 
 /** Entrées par heure dans le sous-réseau à l'heure de pointe pour demandScale = 1 (valeur calibrée). */
-export const PEAK_ENTRIES_PER_HOUR = 210_000;
+export const PEAK_ENTRIES_PER_HOUR = 420_000;
 
 /** Intervalle de génération de la demande (s simulées). */
 export const GENERATION_INTERVAL = 60;
@@ -88,7 +88,15 @@ export class DemandModel {
     const r = network.stations.map((s) => s.residential);
     const e = network.stations.map((s) => s.employment);
     // Les correspondances concentrent plus de flux (lignes hors périmètre, gares).
-    const hub = network.stations.map((s) => 1 + 0.35 * (s.lines.length - 1) + (s.note ? 0.25 : 0));
+    // Les stations bien desservies (plusieurs lignes, lignes capacitaires, gares RER) génèrent plus
+    // de déplacements : facteur ∝ √(capacité offerte), borné, + bonus de correspondance externe.
+    const hub = network.stations.map((s) => {
+      const offered = s.lines.reduce((acc, l) => {
+        const def = network.lineById.get(l)!;
+        return acc + def.baseFrequency * def.trainCapacity;
+      }, 0);
+      return Math.min(2.2, Math.max(0.45, Math.sqrt(offered / 17000))) + (s.note ? 0.3 : 0);
+    });
     this.emission = new Float64Array(3 * S);
     this.emissionTotal = new Float64Array(3);
     const attraction = new Float64Array(3 * S);
@@ -143,7 +151,7 @@ export class DemandModel {
     const mix = patternMix(timeOfDay);
     for (let o = 0; o < S; o++) {
       const n = (this.rate(o, timeOfDay, scale) * interval * originFactor[o]) / 3600;
-      const m = n < 2 ? 1 : n < 6 ? 2 : n < 15 ? 3 : 4;
+      const m = n < 3 ? 1 : n < 10 ? 2 : n < 25 ? 3 : 4;
       for (let k = 0; k < SAMPLES_PER_ORIGIN; k++) {
         const u1 = rng.next();
         const u2 = rng.next();

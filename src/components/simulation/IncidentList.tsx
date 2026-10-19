@@ -6,6 +6,7 @@ import { describeEffect, SEVERITY_LABELS } from '@/engine/incidentManager';
 import { fmtClock } from '@/lib/metrics';
 import { controller } from '@/lib/simulationController';
 import { useSelection, useSimulation } from '@/store/simulationStore';
+import { NO_INCIDENTS } from '@/store/simulationStore';
 import type { Incident, Severity } from '@/types/incident';
 import { Button, cx, Segmented } from '../ui/primitives';
 
@@ -17,10 +18,10 @@ export const STATUS_LABEL: Record<Incident['status'], string> = {
 };
 
 const STATUS_STYLE: Record<Incident['status'], string> = {
-  scheduled: 'bg-sky-500/15 text-sky-300',
-  active: 'bg-red-500/20 text-red-300',
-  suspended: 'bg-amber-500/15 text-amber-300',
-  resolved: 'bg-slate-500/20 text-slate-300',
+  scheduled: 'bg-sky-500/15 text-sky-700',
+  active: 'bg-red-500/20 text-red-600',
+  suspended: 'bg-amber-500/15 text-amber-700',
+  resolved: 'bg-slate-500/20 text-slate-600',
 };
 
 export function remainingSeconds(inc: Incident): number | null {
@@ -30,7 +31,7 @@ export function remainingSeconds(inc: Incident): number | null {
 
 /** Liste compacte des perturbations (barre latérale gauche). */
 export function IncidentList({ showResolved = false }: { showResolved?: boolean }) {
-  const incidents = useSimulation((s) => s.snapshot?.incidents ?? []);
+  const incidents = useSimulation((s) => s.snapshot?.incidents ?? NO_INCIDENTS);
   const selected = useSelection((s) => s.selected);
   const list = incidents.filter((i) => showResolved || i.status !== 'resolved').slice().reverse();
   if (list.length === 0) return <p className="text-[11px] text-faint">Aucune perturbation en cours.</p>;

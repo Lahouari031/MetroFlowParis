@@ -3,7 +3,8 @@
 import { create } from 'zustand';
 import { loadSettings, saveSettings } from '@/lib/persistence';
 
-export type FlowMode = 'segments' | 'heatmap' | 'mixed';
+/** plan : couleurs de ligne + halo de congestion ; segments : lignes colorées par l'indicateur ; heatmap : densité. */
+export type FlowMode = 'plan' | 'segments' | 'heatmap' | 'mixed';
 export type MapMetric = 'saturation' | 'flow' | 'delay' | 'variation';
 
 export interface Layers {
@@ -15,6 +16,9 @@ export interface Layers {
   routes: boolean;
   particles: boolean;
   minimap: boolean;
+  trains: boolean;
+  crowds: boolean;
+  geography: boolean;
 }
 
 export interface Settings {
@@ -37,10 +41,13 @@ export const DEFAULT_SETTINGS: Settings = {
     flows: true,
     incidents: true,
     routes: true,
-    particles: true,
-    minimap: true,
+    particles: false,
+    minimap: false,
+    trains: true,
+    crowds: true,
+    geography: true,
   },
-  flowMode: 'segments',
+  flowMode: 'plan',
   metric: 'saturation',
   heatOpacity: 0.55,
   thresholds: [0.4, 0.65, 0.85, 1],

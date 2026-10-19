@@ -3,7 +3,7 @@
  * (données calculées par le moteur à partir des incidents et de la régulation).
  */
 
-export type LineId = '1' | '4' | '7' | '9' | '14';
+export type LineId = '1' | '2' | '3' | '3bis' | '4' | '5' | '6' | '7' | '7bis' | '8' | '9' | '10' | '11' | '12' | '13' | '14';
 
 /** Point schématique libre (coude de tracé), sans station. */
 export interface Waypoint {
@@ -58,9 +58,12 @@ export interface StationDefinition {
   name: string;
   /** Nom court éventuel pour l'étiquette du plan (le nom officiel reste affiché dans les panneaux). */
   shortName?: string;
-  /** Coordonnées schématiques ancrées (stations de correspondance, terminus, coudes). */
+  /** Coordonnées de plan (unités de carte, 1 unité ≈ 10 m). */
   x?: number;
   y?: number;
+  /** Coordonnées géographiques approximatives (WGS84). */
+  lat?: number;
+  lon?: number;
   /** Poids "résidentiel" synthétique (émission du matin, attraction du soir). */
   residential: number;
   /** Poids "emplois / pôles" synthétique (attraction du matin, émission du soir). */
@@ -96,6 +99,8 @@ export interface Station {
   employment: number;
   capacity: number;
   label: LabelPlacement;
+  lat?: number;
+  lon?: number;
   isTerminus: boolean;
   isInterchange: boolean;
   note?: string;

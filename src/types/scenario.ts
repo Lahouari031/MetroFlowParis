@@ -21,7 +21,8 @@ export type ObjectiveMetric =
   | 'operatingCost'
   | 'congestionClearedAfterIncidents'
   | 'serviceQualityMean'
-  | 'waitingEnd';
+  | 'waitingEnd'
+  | 'affectedDelay';
 
 export interface ObjectiveDefinition {
   id: string;
@@ -89,6 +90,8 @@ export interface RunSummary {
   waitingEnd: number;
   /** Minutes entre la fin du dernier incident et le retour sous le seuil de congestion (null si non résorbé). */
   congestionClearedAfterIncidents: number | null;
+  /** Retard moyen des voyageurs affectés par un incident (s). */
+  affectedDelay: number;
 }
 
 export interface ScoreResult {

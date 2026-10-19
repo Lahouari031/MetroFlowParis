@@ -106,7 +106,7 @@ export const SEVERITY_LABELS: Record<Severity, string> = { 1: 'Faible', 2: 'Moye
 
 /** Paramètres des effets par type et par gravité (index 0 = faible). */
 export const EFFECT_PARAMETERS = {
-  malaise: { timeAdd: [60, 150, 300], capacity: [0.85, 0.6, 0.35], lineFrequency: [1, 1, 0.9] },
+  malaise: { timeAdd: [60, 180, 420], capacity: [0.85, 0.55, 0.25], lineFrequency: [1, 0.92, 0.8] },
   technical_failure: { speed: [1.3, 1.6, 2.2], capacity: [0.75, 0.5, 0.3] },
   line_slowdown: { speed: [1.15, 1.3, 1.5] },
   frequency_reduction: { frequency: [0.85, 0.7, 0.5] },

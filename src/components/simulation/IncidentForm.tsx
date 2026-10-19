@@ -31,7 +31,7 @@ export function IncidentFormModal() {
   const draft = useSelection((s) => s.incidentDraft);
   const close = useSelection((s) => s.closeIncidentForm);
   return (
-    <Modal open={!!draft} onClose={close} title={<span className="flex items-center gap-2"><Siren size={15} className="text-red-400" /> Ajouter une perturbation</span>} width="max-w-2xl">
+    <Modal open={!!draft} onClose={close} title={<span className="flex items-center gap-2"><Siren size={15} className="text-red-600" /> Ajouter une perturbation</span>} width="max-w-2xl">
       {draft && <IncidentForm key={JSON.stringify(draft)} initialStation={draft.stationId} initialSegment={draft.segmentId} initialLine={draft.line} onDone={close} />}
     </Modal>
   );
@@ -229,7 +229,7 @@ function IncidentForm({
             </ul>
           )}
           {unknownStation && (
-            <p className="mt-1 flex items-start gap-1 text-[11px] text-amber-300">
+            <p className="mt-1 flex items-start gap-1 text-[11px] text-amber-700">
               <AlertTriangle size={12} className="mt-0.5 shrink-0" />
               Station indisponible dans cette version : seules les lignes 1, 4, 7, 9 et 14 sont modélisées. Aucune connexion fictive n&apos;est créée.
             </p>
@@ -334,7 +334,7 @@ function IncidentForm({
       )}
 
       {error && (
-        <p className="flex items-center gap-1.5 rounded border border-red-500/40 bg-red-950/40 px-2 py-1.5 text-red-200">
+        <p className="flex items-center gap-1.5 rounded border border-red-500/40 bg-red-50 px-2 py-1.5 text-red-700">
           <AlertTriangle size={13} /> {error}
         </p>
       )}

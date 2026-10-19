@@ -9,14 +9,19 @@ describe('Données du réseau', () => {
     expect(issues.filter((i) => i.level === 'error')).toEqual([]);
   });
 
-  it('contient les lignes 1, 4, 7, 9, 14 avec le bon nombre de stations', () => {
+  it('contient les 16 lignes avec le bon nombre de stations', () => {
     const count = (line: string) => new Set(network.segments.filter((s) => s.line === line).flatMap((s) => [s.a, s.b])).size;
     expect(count('1')).toBe(25);
     expect(count('4')).toBe(29);
     expect(count('7')).toBe(38);
     expect(count('9')).toBe(37);
     expect(count('14')).toBe(21);
-    expect(network.stations).toHaveLength(138);
+    expect(count('2')).toBe(25);
+    expect(count('3bis')).toBe(4);
+    expect(count('11')).toBe(19);
+    expect(count('13')).toBe(32);
+    expect(network.lines).toHaveLength(16);
+    expect(network.stations).toHaveLength(321);
   });
 
   it('chaque tronçon relie deux stations existantes et chaque arc a son sens opposé', () => {
@@ -37,10 +42,27 @@ describe('Données du réseau', () => {
   });
 
   it('identifie les correspondances principales', () => {
-    expect(station('chatelet').lines).toEqual(['1', '4', '7', '14']);
-    expect(station('nation').lines).toEqual(['1', '9']);
+    expect(station('chatelet').lines).toEqual(['1', '4', '7', '11', '14']);
+    expect(station('nation').lines).toEqual(['1', '2', '6', '9']);
+    expect(station('republique').lines).toEqual(['3', '5', '8', '9', '11']);
     expect(station('maison-blanche').lines).toEqual(['7', '14']);
     expect(station('gare-de-l-est').isInterchange).toBe(true);
+  });
+
+  it('place les stations selon leur position géographique (ordre de grandeur)', () => {
+    // Châtelet est au centre ; La Défense à l'ouest, Château de Vincennes à l'est, Orly au sud.
+    expect(station('la-defense').x).toBeLessThan(station('chatelet').x - 800);
+    expect(station('chateau-de-vincennes').x).toBeGreaterThan(station('chatelet').x + 600);
+    expect(station('aeroport-d-orly').y).toBeGreaterThan(station('chatelet').y + 1200);
+    expect(station('saint-denis-universite').y).toBeLessThan(station('chatelet').y - 900);
+    // Inter-stations : entre 150 m et 3 km.
+    for (const s of network.segments) {
+      const a = station(s.a);
+      const b = station(s.b);
+      const meters = Math.hypot(a.x - b.x, a.y - b.y) * 10;
+      expect(meters).toBeGreaterThan(150);
+      expect(meters).toBeLessThan(3000);
+    }
   });
 
   it('modélise les branches de la ligne 7 (demi-service sur chaque branche)', () => {

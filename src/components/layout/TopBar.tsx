@@ -20,9 +20,9 @@ export const SPEEDS: Speed[] = [1, 2, 5, 10];
 
 export function networkStatus(k: { activeIncidents: number; saturatedSegments: number; serviceQuality: number } | undefined) {
   if (!k) return { label: '—', color: 'text-muted', dot: 'bg-slate-500' };
-  if (k.serviceQuality < 70) return { label: 'Critique', color: 'text-red-300', dot: 'bg-red-500' };
-  if (k.activeIncidents > 0 || k.serviceQuality < 88) return { label: 'Perturbé', color: 'text-amber-300', dot: 'bg-amber-400' };
-  return { label: 'Nominal', color: 'text-emerald-300', dot: 'bg-emerald-400' };
+  if (k.serviceQuality < 70) return { label: 'Critique', color: 'text-red-600', dot: 'bg-red-500' };
+  if (k.activeIncidents > 0 || k.serviceQuality < 88) return { label: 'Perturbé', color: 'text-amber-700', dot: 'bg-amber-400' };
+  return { label: 'Nominal', color: 'text-emerald-700', dot: 'bg-emerald-400' };
 }
 
 export function TopBar() {
@@ -132,11 +132,11 @@ export function TopBar() {
 function Logo() {
   return (
     <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="1" y="1" width="30" height="30" rx="8" fill="#0b1a2e" stroke="#38bdf8" strokeOpacity="0.6" />
-      <path d="M6 22 L12 10 L16 18 L20 10 L26 22" fill="none" stroke="#38bdf8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="1" y="1" width="30" height="30" rx="8" fill="#ffffff" stroke="#1e2126" strokeOpacity="0.9" />
+      <path d="M6 22 L12 10 L16 18 L20 10 L26 22" fill="none" stroke="#1e2126" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="12" cy="10" r="2.2" fill="#FFCD00" />
       <circle cx="20" cy="10" r="2.2" fill="#FA9ABA" />
-      <circle cx="16" cy="18" r="2.2" fill="#fff" />
+      <circle cx="16" cy="18" r="2.2" fill="#2563eb" />
     </svg>
   );
 }

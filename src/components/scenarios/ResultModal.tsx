@@ -39,16 +39,16 @@ export function ResultModal() {
       <ResultContent result={result} />
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Button
-          onClick={() => {
-            const data = controller.exportData();
+          onClick={async () => {
+            const data = await controller.exportData();
             if (data) downloadText('metroflow-resultats.csv', historyToCsv(data.history, data.referenceHistory), 'text/csv');
           }}
         >
           <Download size={14} /> CSV
         </Button>
         <Button
-          onClick={() => {
-            const data = controller.exportData();
+          onClick={async () => {
+            const data = await controller.exportData();
             if (data) downloadText('metroflow-resultats.json', runToJson(data), 'application/json');
           }}
         >
@@ -80,7 +80,7 @@ export function ResultContent({ result }: { result: ScoreResult }) {
           <div className="text-[11px] text-muted">/ 1000 points</div>
         </div>
         <div className="flex-1">
-          <div className={cx('mb-1 flex items-center gap-2 font-semibold', result.success ? 'text-emerald-300' : 'text-red-300')}>
+          <div className={cx('mb-1 flex items-center gap-2 font-semibold', result.success ? 'text-emerald-700' : 'text-red-600')}>
             {result.success ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
             {result.success ? 'Objectifs principaux atteints' : 'Objectifs principaux non atteints'}
           </div>
@@ -96,7 +96,7 @@ export function ResultContent({ result }: { result: ScoreResult }) {
         <ul className="space-y-1">
           {result.objectives.map((o) => (
             <li key={o.objective.id} className="flex items-center gap-2 rounded border border-edge px-2.5 py-1.5 text-xs">
-              {o.achieved ? <CheckCircle2 size={14} className="text-emerald-400" /> : <XCircle size={14} className="text-red-400" />}
+              {o.achieved ? <CheckCircle2 size={14} className="text-emerald-600" /> : <XCircle size={14} className="text-red-600" />}
               <span className="flex-1">
                 {o.objective.label}
                 {!o.objective.primary && <span className="ml-1.5 text-[10px] text-faint">(secondaire)</span>}

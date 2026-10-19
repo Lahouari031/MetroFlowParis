@@ -13,19 +13,30 @@ MétroFlow Paris distingue quatre catégories de données. Chaque valeur affich�
 
 ### Périmètre
 
-Lignes **1, 4, 7, 9 et 14**, au complet, avec leurs terminus actuels :
+Les **16 lignes du métro** (1 à 14, 3bis, 7bis), avec leurs terminus actuels — 321 stations, 391 tronçons, 782 arcs orientés :
 
 | Ligne | Terminus | Stations | Particularités |
 |---|---|---|---|
-| 1 | La Défense ↔ Château de Vincennes | 25 | |
-| 4 | Porte de Clignancourt ↔ Bagneux–Lucie Aubrac | 29 | prolongement 2022 inclus |
+| 1 | La Défense ↔ Château de Vincennes | 25 | automatique |
+| 2 | Porte Dauphine ↔ Nation | 25 | |
+| 3 | Pont de Levallois–Bécon ↔ Gallieni | 25 | |
+| 3bis | Gambetta ↔ Porte des Lilas | 4 | |
+| 4 | Porte de Clignancourt ↔ Bagneux–Lucie Aubrac | 29 | automatique, prolongement 2022 |
+| 5 | Bobigny–Pablo Picasso ↔ Place d'Italie | 22 | |
+| 6 | Charles de Gaulle–Étoile ↔ Nation | 28 | |
 | 7 | La Courneuve–8 Mai 1945 ↔ Villejuif–Louis Aragon / Mairie d'Ivry | 38 | deux branches à partir de Maison Blanche |
+| 7bis | Louis Blanc ↔ Pré-Saint-Gervais | 8 | boucle à sens unique simulée dans les deux sens |
+| 8 | Balard ↔ Pointe du Lac | 38 | |
 | 9 | Pont de Sèvres ↔ Mairie de Montreuil | 37 | |
-| 14 | Saint-Denis Pleyel ↔ Aéroport d'Orly | 21 | prolongements 2024 inclus |
+| 10 | Boulogne–Pont de Saint-Cloud ↔ Gare d'Austerlitz | 23 | boucle d'Auteuil simulée dans les deux sens |
+| 11 | Châtelet ↔ Rosny–Bois-Perrier | 19 | prolongement 2024 |
+| 12 | Mairie d'Aubervilliers ↔ Mairie d'Issy | 31 | |
+| 13 | Saint-Denis–Université / Asnières–Gennevilliers ↔ Châtillon–Montrouge | 32 | deux branches à partir de La Fourche |
+| 14 | Saint-Denis Pleyel ↔ Aéroport d'Orly | 21 | automatique, prolongements 2024 |
 
-Soit 138 stations, 145 tronçons et 290 arcs orientés. Les autres lignes (2, 3, 3bis, 5, 6, 7bis, 8, 10, 11, 12, 13) et le RER **ne sont pas simulés** ; les correspondances réelles vers ces lignes sont seulement mentionnées à titre informatif dans le panneau de chaque station (« Correspondances hors périmètre »).
+Le RER, le tramway et le bus **ne sont pas simulés** ; les correspondances vers ces modes sont seulement mentionnées à titre informatif dans le panneau de chaque station.
 
-Correspondance piétonne entre stations distinctes reprise : **Havre–Caumartin ↔ Saint-Lazare** (couloir via Haussmann–Saint-Lazare). Aucune autre liaison n'est créée.
+Correspondances piétonnes entre stations distinctes reprises : **Havre–Caumartin ↔ Saint-Lazare** et **La Chapelle ↔ Gare du Nord**. Les correspondances internes (même nom de station) sont déduites automatiquement.
 
 ### Origine et vérification
 
@@ -44,34 +55,49 @@ Correspondance piétonne entre stations distinctes reprise : **Havre–Caumartin
 
 Les licences ODbL imposent l'attribution et le partage à l'identique des bases dérivées : en cas d'import, conserver la mention de la source et la date d'extraction dans ce fichier.
 
-### Plan schématique
+### Plan et fond de carte
 
-Les coordonnées **ne proviennent pas du plan officiel de la RATP** (dont la réutilisation est soumise à conditions). Elles ont été dessinées pour ce projet : seules les stations « ancres » (correspondances, terminus, coudes) ont des coordonnées explicites ; les autres sont réparties automatiquement le long du tracé de leur ligne. Les étiquettes sont placées par un algorithme glouton anti-collision, avec quelques ajustements manuels (`LABEL_OVERRIDES`). Les couleurs de ligne sont proches des couleurs officielles, pour la lisibilité.
+- **Positions des stations** : latitude/longitude **approximatives**, saisies de mémoire à partir de la géographie publique de Paris (précision de l'ordre de 100 à 300 m), puis projetées (équirectangulaire centrée sur Paris, 1 unité ≈ 10 m). Elles ne proviennent ni du plan officiel RATP ni d'un jeu open data ; le recoupement avec « Positions géographiques des stations » est la première amélioration recommandée.
+- **Tracé** : style épuré inspiré de *Mini Metro* — chaque tronçon est redressé en segments horizontaux, verticaux ou à 45°, et les lignes qui partagent un même tronçon sont décalées parallèlement. Le tracé suit donc la géographie réelle sans en reproduire les courbes exactes.
+- **Fond de carte** (`src/data/geography.ts`) : Seine, îles de la Cité et Saint-Louis, boulevard périphérique, bois de Boulogne et de Vincennes, principaux parcs et une douzaine de monuments-repères (tour Eiffel, Arc de Triomphe, Sacré-Cœur, Notre-Dame, Louvre, Panthéon…). Contours **simplifiés dessinés à la main** à partir de coordonnées approximatives, à seule fin de repérage.
+- Les étiquettes sont placées par un algorithme glouton anti-collision ; les couleurs de ligne sont proches des couleurs officielles, pour la lisibilité.
 
 ## 2. Paramètres de modèle (valeurs configurées)
 
 Ordres de grandeur publics arrondis, **pas des données d'exploitation** :
 
-| Ligne | Fréquence de pointe (trains/h) | Max | Capacité d'une rame | Rames de réserve |
-|---|---|---|---|---|
-| 1 | 38 | 42 | 720 | 6 |
-| 4 | 34 | 40 | 720 | 10 |
-| 7 | 30 (tronc), 15 par branche | 36 | 574 | 12 |
-| 9 | 30 | 36 | 620 | 13 |
-| 14 | 40 | 42 | 950 | 6 |
+| Ligne | Fréquence de pointe (trains/h) | Max | Capacité d'une rame | Rames de réserve | Vitesse commerciale (km/h) |
+|---|---|---|---|---|---|
+| 1 | 38 | 42 | 720 | 6 | 30 |
+| 2 | 30 | 34 | 560 | 6 | 25 |
+| 3 | 26 | 30 | 560 | 6 | 25 |
+| 3bis | 12 | 16 | 280 | 2 | 22 |
+| 4 | 34 | 40 | 720 | 10 | 24 |
+| 5 | 28 | 32 | 560 | 6 | 27 |
+| 6 | 28 | 32 | 560 | 6 | 26 |
+| 7 | 30 (tronc), 15 par branche | 36 | 574 | 12 | 25 |
+| 7bis | 12 | 16 | 290 | 2 | 20 |
+| 8 | 26 | 30 | 560 | 8 | 27 |
+| 9 | 30 | 36 | 620 | 13 | 23 |
+| 10 | 22 | 26 | 560 | 6 | 24 |
+| 11 | 24 | 28 | 560 | 6 | 27 |
+| 12 | 26 | 30 | 560 | 6 | 26 |
+| 13 | 32 (tronc), 16 par branche | 36 | 574 | 8 | 30 |
+| 14 | 40 | 42 | 950 | 6 | 40 |
 
-- Temps de parcours : dérivés de la longueur schématique (1 unité ≈ 10 m) et d'une vitesse commerciale par ligne, avec 20 s d'arrêt et un minimum de 60 s ; les inter-stations longues (prolongements de la ligne 14, La Défense…) ont un temps saisi explicitement (`SEGMENT_TIME_OVERRIDES`).
+- Temps de parcours : dérivés de la distance entre stations (positions approximatives) et de la vitesse commerciale de la ligne, avec 20 s d'arrêt et un minimum de 60 s. Des valeurs explicites peuvent être saisies dans `SEGMENT_TIME_OVERRIDES` (aucune actuellement).
 - Correspondances : 180 s par défaut, 210–300 s dans les grandes stations (Châtelet, Montparnasse, Gare de Lyon, Gare de l'Est, Nation).
 - Capacité des quais : 250 voyageurs par quai, valeurs majorées pour les grands pôles.
-- Poids résidentiels / emplois des stations (1 à 10) : **synthétiques**, choisis pour produire des flux plausibles (pôles d'emploi au centre et à La Défense, quartiers résidentiels aux extrémités).
+- Poids résidentiels / emplois des stations : **synthétiques**, calculés à partir de la distance au centre des affaires et d'un bonus pour quelques pôles d'emploi (`EMPLOYMENT_BONUS`).
 - Coûts : 0,6 k€ fictif par rame et par heure, 4 k€ fictifs par rame de réserve mobilisée.
 
 ## 3. Données générées
 
-La demande (nombre de voyageurs, origines, destinations) est **entièrement synthétique** : volume de pointe calibré à 210 000 entrées/heure pour le sous-réseau, profil horaire type, modèle gravitaire. Elle ne reproduit pas les déplacements réels et ne doit pas être présentée comme une mesure RATP ou IDFM. Voir `docs/MODEL.md`.
+La demande (nombre de voyageurs, origines, destinations) est **entièrement synthétique** : volume de pointe calibré à 420 000 entrées/heure pour l'ensemble du métro, profil horaire type, modèle gravitaire. Elle ne reproduit pas les déplacements réels et ne doit pas être présentée comme une mesure RATP ou IDFM. Voir `docs/MODEL.md`.
 
 ## 4. Améliorations recommandées des données
 
 1. Script d'import du GTFS IDFM (hors ligne, une fois) pour générer `lines.ts` et vérifier l'ordre des stations, les identifiants stables et les temps de parcours.
 2. Calage des poids de stations sur le « trafic annuel entrant » RATP (en conservant la mention de la source).
-3. Ajout des lignes 2, 3, 5, 6, 8… : le modèle accepte de nouvelles lignes sans réécriture (ajouter la ligne dans `lines.ts`, ses stations dans `stations.ts`, et des coordonnées pour les nouvelles correspondances).
+3. Remplacement des positions approximatives par les coordonnées officielles des stations, et des contours simplifiés par un fond OpenStreetMap généralisé (ODbL).
+4. Ajout du RER (A, B) : le modèle accepte de nouvelles lignes sans réécriture.

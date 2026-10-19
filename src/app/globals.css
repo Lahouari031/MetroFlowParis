@@ -1,27 +1,27 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-night: #060a13;
-  --color-panel: #0d1524;
-  --color-panel-2: #111c2f;
-  --color-panel-3: #17243a;
-  --color-edge: #1f2d45;
-  --color-edge-strong: #2b3d5c;
-  --color-ink: #e6edf7;
-  --color-muted: #8a9bb5;
-  --color-faint: #5b6b85;
-  --color-accent: #38bdf8;
-  --color-accent-strong: #0ea5e9;
-  --color-ok: #22c55e;
-  --color-warn: #eab308;
-  --color-high: #f97316;
-  --color-bad: #ef4444;
+  --color-night: #f3f1ec;
+  --color-panel: #ffffff;
+  --color-panel-2: #fbfaf7;
+  --color-panel-3: #f1eee8;
+  --color-edge: #e6e1d7;
+  --color-edge-strong: #d3ccbf;
+  --color-ink: #1e2126;
+  --color-muted: #5f6670;
+  --color-faint: #8d939b;
+  --color-accent: #2563eb;
+  --color-accent-strong: #1d4ed8;
+  --color-ok: #16a34a;
+  --color-warn: #ca8a04;
+  --color-high: #ea580c;
+  --color-bad: #dc2626;
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
@@ -39,7 +39,7 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2b3d5c transparent;
+  scrollbar-color: #d3ccbf transparent;
 }
 
 .panel-scroll {
@@ -81,19 +81,45 @@ textarea:focus-visible {
 /* Carte */
 .map-label {
   paint-order: stroke;
-  stroke: #060a13;
-  stroke-width: 3px;
+  stroke: #f3f1ec;
+  stroke-width: 4px;
   stroke-linejoin: round;
-  fill: #cfd8e6;
-  font-size: 9px;
+  fill: #2b2b2b;
+  font-size: 13px;
   font-weight: 500;
   pointer-events: none;
   user-select: none;
 }
 
 .map-label-strong {
-  fill: #f1f5fb;
-  font-weight: 650;
+  fill: #111111;
+  font-weight: 700;
+}
+
+.geo-label {
+  paint-order: stroke;
+  stroke: #f3f1ec;
+  stroke-width: 3px;
+  fill: #9a9384;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes crowd-alarm {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.crowd-alarm {
+  animation: crowd-alarm 1.2s ease-in-out infinite;
 }
 
 @keyframes flow-dash {
@@ -141,7 +167,8 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .flow-particles,
   .incident-pulse,
-  .over-capacity {
+  .over-capacity,
+  .crowd-alarm {
     animation: none;
   }
 }

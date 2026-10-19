@@ -1,7 +1,7 @@
 /** Géométrie de rendu précalculée (chemins SVG, décalages des particules, badges de terminus). */
 import type { Network, Waypoint } from '@/types/network';
 
-export const CONTENT_MARGIN = { left: 110, right: 140, top: 60, bottom: 60 };
+export const CONTENT_MARGIN = { left: 160, right: 200, top: 80, bottom: 80 };
 
 export interface MapGeometry {
   segmentPath: string[];
@@ -57,7 +57,7 @@ export function getGeometry(network: Network): MapGeometry {
   const edgePath = network.edges.map((e) => {
     const seg = network.segments[e.segment];
     const pts = e.direction === 1 ? seg.points : [...seg.points].reverse();
-    return toPath(offsetPolyline(pts, 3.4));
+    return toPath(offsetPolyline(pts, 4));
   });
   const segmentMid = network.segments.map((s) => midpoint(s.points));
   const segmentLength = network.segments.map((s) => s.length);
@@ -72,7 +72,7 @@ export function getGeometry(network: Network): MapGeometry {
       const dx = pts[1].x - pts[0].x;
       const dy = pts[1].y - pts[0].y;
       const len = Math.hypot(dx, dy) || 1;
-      terminusBadges.push({ line, stationId: st.id, x: st.x - (dx / len) * 17, y: st.y - (dy / len) * 17 });
+      terminusBadges.push({ line, stationId: st.id, x: st.x - (dx / len) * 28, y: st.y - (dy / len) * 28 });
     }
   }
   const b = network.bounds;

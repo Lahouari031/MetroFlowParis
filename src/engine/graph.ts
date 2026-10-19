@@ -34,6 +34,10 @@ export interface NetworkInput {
   walkingTransfers: WalkingTransfer[];
   segmentTimeOverrides?: Record<string, number>;
   labelOverrides?: Record<string, Partial<LabelPlacement> | undefined>;
+  /** Tracés à angles de 45° entre stations (style plan de métro) au lieu de lignes droites. */
+  octilinear?: boolean;
+  /** Écart entre deux lignes parallèles sur un même tronçon (unités de carte). */
+  parallelSpacing?: number;
 }
 
 export class NetworkDataError extends Error {
@@ -103,7 +107,8 @@ export function validateNetworkInput(input: NetworkInput): DataIssue[] {
       }
       if (bi > 0) {
         const first = stationsInBranch[0];
-        const inPrevious = line.branches.slice(0, bi).some((b) => b.includes(first));
+        const last = stationsInBranch[stationsInBranch.length - 1];
+        const inPrevious = line.branches.slice(0, bi).some((b) => b.includes(first) || b.includes(last));
         if (!inPrevious) {
           issues.push({ level: 'error', code: 'DETACHED_BRANCH', message: `Ligne ${line.id}, branche ${bi + 1} : ne part pas d'une station déjà tracée` });
         }
@@ -352,6 +357,8 @@ export function buildNetwork(input: NetworkInput): { network: Network; issues: D
     for (const s of lineSegs) s.serviceShare = (count.get(s.id) ?? others.length) / others.length;
   }
 
+  if (input.octilinear) applyOctilinear(segments, pos, input.parallelSpacing ?? 8);
+
   // Arcs orientés.
   const edges: DirectedEdge[] = [];
   for (const s of segments) {
@@ -385,6 +392,8 @@ export function buildNetwork(input: NetworkInput): { network: Network; issues: D
         employment: def.employment,
         capacity: def.capacity ?? PLATFORM_CAPACITY * 2 * lines.length,
         label: { dx: 9, dy: 3, anchor: 'start' },
+        lat: def.lat,
+        lon: def.lon,
         isTerminus,
         isInterchange: lines.length > 1 || transfersOnFoot,
         note: def.note,
@@ -441,22 +450,79 @@ export function buildNetwork(input: NetworkInput): { network: Network; issues: D
 }
 
 /* ------------------------------------------------------------------------------------------
+ * Tracés « plan de métro » : chaque inter-station est dessinée avec des segments horizontaux,
+ * verticaux ou à 45° (un coude centré), comme dans les plans schématiques et Mini Metro.
+ * Les lignes qui partagent la même paire de stations sont décalées parallèlement.
+ * ---------------------------------------------------------------------------------------- */
+
+function octiPath(a: Waypoint, b: Waypoint): Waypoint[] {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const adx = Math.abs(dx);
+  const ady = Math.abs(dy);
+  const sx = Math.sign(dx);
+  const sy = Math.sign(dy);
+  const diag = Math.min(adx, ady);
+  const straight = Math.max(adx, ady) - diag;
+  if (diag < 4 || straight < 4) return [a, b];
+  const half = straight / 2;
+  const p1 = adx > ady ? { x: a.x + sx * half, y: a.y } : { x: a.x, y: a.y + sy * half };
+  const p2 = adx > ady ? { x: p1.x + sx * diag, y: p1.y + sy * diag } : { x: p1.x + sx * diag, y: p1.y + sy * diag };
+  return [a, p1, p2, b];
+}
+
+function applyOctilinear(segments: Segment[], pos: Map<string, Waypoint>, spacing: number) {
+  const groups = new Map<string, Segment[]>();
+  for (const s of segments) {
+    const key = s.a < s.b ? `${s.a}|${s.b}` : `${s.b}|${s.a}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(s);
+  }
+  for (const group of groups.values()) {
+    group.forEach((s, i) => {
+      // Orientation commune (station de plus petit identifiant en premier) pour des décalages cohérents.
+      const [from, to] = s.a < s.b ? [s.a, s.b] : [s.b, s.a];
+      let pts = octiPath(pos.get(from)!, pos.get(to)!);
+      const offset = (i - (group.length - 1) / 2) * spacing;
+      if (offset !== 0) pts = offsetPoints(pts, offset);
+      if (from !== s.a) pts = [...pts].reverse();
+      s.points = pts.map((p) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 }));
+      s.length = polylineLength(s.points);
+    });
+  }
+}
+
+function offsetPoints(points: Waypoint[], d: number): Waypoint[] {
+  const n = points.length;
+  return points.map((p, i) => {
+    const prev = points[Math.max(0, i - 1)];
+    const next = points[Math.min(n - 1, i + 1)];
+    let dx = next.x - prev.x;
+    let dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    return { x: p.x - dy * d, y: p.y + dx * d };
+  });
+}
+
+/* ------------------------------------------------------------------------------------------
  * Placement des étiquettes : algorithme glouton avec évitement des collisions.
  * Chaque étiquette est approximée par une suite de points le long de sa ligne de base.
  * ---------------------------------------------------------------------------------------- */
 
-const CHAR_W = 4.6;
-const FONT_H = 9;
+const CHAR_W = 6.8;
+const FONT_H = 13;
 
 const CANDIDATES: LabelPlacement[] = [
-  { dx: 9, dy: 3, anchor: 'start', rotate: 0 },
-  { dx: -9, dy: 3, anchor: 'end', rotate: 0 },
-  { dx: 6, dy: -6, anchor: 'start', rotate: -40 },
-  { dx: -6, dy: 8, anchor: 'end', rotate: -40 },
-  { dx: 0, dy: -9, anchor: 'middle', rotate: 0 },
-  { dx: 0, dy: 15, anchor: 'middle', rotate: 0 },
-  { dx: 6, dy: 8, anchor: 'start', rotate: 40 },
-  { dx: -6, dy: -5, anchor: 'end', rotate: 40 },
+  { dx: 13, dy: 4.5, anchor: 'start', rotate: 0 },
+  { dx: -13, dy: 4.5, anchor: 'end', rotate: 0 },
+  { dx: 0, dy: -13, anchor: 'middle', rotate: 0 },
+  { dx: 0, dy: 22, anchor: 'middle', rotate: 0 },
+  { dx: 9, dy: -9, anchor: 'start', rotate: -35 },
+  { dx: -9, dy: 12, anchor: 'end', rotate: -35 },
+  { dx: 9, dy: 12, anchor: 'start', rotate: 35 },
+  { dx: -9, dy: -8, anchor: 'end', rotate: 35 },
 ];
 
 function labelSamples(st: { x: number; y: number }, text: string, c: LabelPlacement, scale: number): Waypoint[] {
@@ -469,7 +535,7 @@ function labelSamples(st: { x: number; y: number }, text: string, c: LabelPlacem
   const oy = st.y + c.dy * scale;
   const start = c.anchor === 'start' ? 0 : c.anchor === 'end' ? -width : -width / 2;
   const pts: Waypoint[] = [];
-  for (let t = start; t <= start + width; t += 5) {
+  for (let t = start; t <= start + width; t += 7) {
     // Point au milieu de la hauteur du texte (décalé de FONT_H/3 au-dessus de la ligne de base).
     const nx = uy * (FONT_H / 3);
     const ny = -ux * (FONT_H / 3);
@@ -483,7 +549,7 @@ function placeLabels(
   segments: Segment[],
   overrides: Record<string, Partial<LabelPlacement> | undefined>,
 ) {
-  const CELL = 12;
+  const CELL = 16;
   const makeGrid = () => {
     const grid = new Map<string, Waypoint[]>();
     return {
@@ -537,7 +603,7 @@ function placeLabels(
       CANDIDATES.forEach((c, idx) => {
         const pts = labelSamples(st, st.mapLabel, c, scale);
         let score = idx * 0.3; // légère préférence pour l'ordre des candidats
-        for (const p of pts) score += lineGrid.near(p, 6, 6) + 4 * labelGrid.near(p, 7, 10);
+        for (const p of pts) score += lineGrid.near(p, 8, 8) + 4 * labelGrid.near(p, 9, 14);
         if (score < bestScore) {
           bestScore = score;
           best = c;

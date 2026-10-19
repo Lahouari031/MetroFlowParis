@@ -122,6 +122,8 @@ export interface KPIs {
   operatingCost: number;
   /** Rames en service (toutes lignes). */
   trainsInService: number;
+  /** Retard moyen des trajets terminés par des voyageurs affectés par un incident (s, cumul). */
+  affectedDelay: number;
 }
 
 export interface HistoryPoint {
@@ -155,6 +157,8 @@ export interface SimSnapshot {
   edgeCapacity: Float32Array;
   edgeQueue: Float32Array;
   edgeDelay: Float32Array;
+  /** Temps de parcours effectif de chaque arc (s), incidents compris. */
+  edgeTravelTime: Float32Array;
   /** Par tronçon (max des deux sens). */
   segmentSaturation: Float32Array;
   segmentFlow: Float32Array;

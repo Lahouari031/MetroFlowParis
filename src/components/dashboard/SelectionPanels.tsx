@@ -8,6 +8,7 @@ import { fmtClock, fmtInt, fmtMin, fmtPct, levelColor, saturationLevel } from '@
 import { controller } from '@/lib/simulationController';
 import { useSettings } from '@/store/settingsStore';
 import { useSelection, useSimulation } from '@/store/simulationStore';
+import { NO_INCIDENTS } from '@/store/simulationStore';
 import type { Network } from '@/types/network';
 import { IncidentDetail } from '../simulation/IncidentList';
 import { Button, ConfirmDialog, LineBadge } from '../ui/primitives';
@@ -15,7 +16,7 @@ import { CHART } from './charts';
 
 export function SelectionPanel() {
   const selected = useSelection((s) => s.selected);
-  const incidents = useSimulation((s) => s.snapshot?.incidents ?? []);
+  const incidents = useSimulation((s) => s.snapshot?.incidents ?? NO_INCIDENTS);
   if (!selected) return null;
   if (selected.kind === 'station') return <StationPanel id={selected.id} />;
   if (selected.kind === 'segment') return <SegmentPanel id={selected.id} />;
@@ -91,7 +92,7 @@ function StationPanel({ id }: { id: string }) {
               <Tooltip
                 formatter={(v) => [`${fmtInt(Number(v))} voy.`, 'À quai']}
                 labelFormatter={(t) => fmtClock(Number(t))}
-                contentStyle={{ background: CHART.tooltipBg, border: '1px solid #2b3d5c', fontSize: 11 }}
+                contentStyle={{ background: CHART.tooltipBg, border: '1px solid #e6e1d7', fontSize: 11 }}
               />
               <Area type="monotone" dataKey="v" stroke={CHART.primary} strokeWidth={2} fill={CHART.primary} fillOpacity={0.15} isAnimationActive={false} />
             </AreaChart>
@@ -123,7 +124,7 @@ function StationPanel({ id }: { id: string }) {
 
       {stationIncidents.length > 0 && (
         <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-red-300">Incidents sur la station</div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-red-600">Incidents sur la station</div>
           {stationIncidents.map((i) => (
             <button key={i.id} type="button" className="block w-full truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-panel-3" onClick={() => useSelection.getState().select({ kind: 'incident', id: i.id })}>
               {i.label}
@@ -218,8 +219,8 @@ function RoutePlanner({
         <Button
           size="xs"
           disabled={!dest}
-          onClick={() => {
-            const r = controller.routeBetween(fromId, dest);
+          onClick={async () => {
+            const r = await controller.routeBetween(fromId, dest);
             if (!r) useSelection.getState().setRoute(null);
             else useSelection.getState().setRoute({ from: fromId, to: dest, ...r });
             if (!r) alertNoRoute();
@@ -279,7 +280,7 @@ function SegmentPanel({ id }: { id: string }) {
           <h3 className="mt-1 text-sm font-semibold leading-tight">
             {a.name} ↔ {b.name}
           </h3>
-          <div className={available ? 'text-[10px] text-muted' : 'text-[10px] text-red-300'}>{available ? 'En service' : 'Interrompu'}</div>
+          <div className={available ? 'text-[10px] text-muted' : 'text-[10px] text-red-600'}>{available ? 'En service' : 'Interrompu'}</div>
         </div>
         <button type="button" className="rounded p-0.5 text-faint hover:text-ink" aria-label="Fermer le panneau" onClick={() => useSelection.getState().select(null)}>
           <X size={14} />

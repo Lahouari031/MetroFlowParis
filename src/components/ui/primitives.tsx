@@ -38,7 +38,7 @@ export function Button({
     ghost: 'text-muted hover:text-ink hover:bg-panel-3',
     danger: 'bg-red-600/90 text-white hover:bg-red-500',
     success: 'bg-emerald-600/90 text-white hover:bg-emerald-500',
-    subtle: 'bg-panel-3 text-ink border border-edge-strong hover:border-accent/60 hover:bg-[#1c2c47]',
+    subtle: 'bg-panel-3 text-ink border border-edge-strong hover:border-accent/60 hover:bg-[#ebe6dc]',
   };
   const sizes = { xs: 'h-6 px-2 text-[11px] gap-1', sm: 'h-7 px-2.5 text-xs gap-1.5', md: 'h-9 px-3.5 text-sm gap-2' };
   return (
@@ -97,7 +97,7 @@ export function InfoTip({ text, children }: { text: string; children: ReactNode 
       <span
         id={id}
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden w-56 -translate-x-1/2 rounded-md border border-edge-strong bg-[#0b1322] px-2.5 py-1.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-ink shadow-xl group-hover:block group-focus:block"
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden w-56 -translate-x-1/2 rounded-md border border-edge-strong bg-white px-2.5 py-1.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-ink shadow-xl group-hover:block group-focus:block"
       >
         {text}
       </span>
@@ -233,7 +233,7 @@ export function Modal({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"

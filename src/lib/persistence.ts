@@ -74,12 +74,12 @@ function writeJson(key: string, value: unknown): string | null {
 /* ------------------------------------------------------------------ réglages */
 
 export function loadSettings<T>(fallback: T): { value: T; error: string | null } {
-  const { value, error } = readJson<Partial<T>>('settings', {});
+  const { value, error } = readJson<Partial<T>>('settings-v2', {});
   return { value: { ...fallback, ...(value && typeof value === 'object' ? value : {}) }, error };
 }
 
 export function saveSettings(value: unknown): string | null {
-  return writeJson('settings', value);
+  return writeJson('settings-v2', value);
 }
 
 /* ------------------------------------------------------------------ scénarios sauvegardés */
@@ -168,5 +168,5 @@ export function storeRuns(runs: RecordedRun[]): string | null {
 }
 
 export function clearAllLocalData() {
-  for (const k of ['settings', 'saves', 'progress', 'runs']) backend.remove(PREFIX + k);
+  for (const k of ['settings', 'settings-v2', 'saves', 'progress', 'runs']) backend.remove(PREFIX + k);
 }

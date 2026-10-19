@@ -25,7 +25,7 @@ export function ChallengeScreen() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="flex items-center gap-2 text-lg font-semibold">
-              <Trophy size={18} className="text-amber-300" /> Défis
+              <Trophy size={18} className="text-amber-700" /> Défis
             </h1>
             <p className="text-xs text-muted">Relevez un défi : jouez le scénario jusqu&apos;à la fin du temps imparti. Le score est calculé par le moteur selon des règles publiques.</p>
           </div>

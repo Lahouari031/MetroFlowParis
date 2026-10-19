@@ -57,8 +57,8 @@ function DataErrorScreen() {
   const issues = useSimulation((s) => s.dataIssues);
   return (
     <div className="panel-scroll h-full p-8">
-      <div className="mx-auto max-w-3xl rounded-xl border border-red-500/40 bg-red-950/30 p-6">
-        <h1 className="mb-2 flex items-center gap-2 text-lg font-semibold text-red-300">
+      <div className="mx-auto max-w-3xl rounded-xl border border-red-500/40 bg-red-50 p-6">
+        <h1 className="mb-2 flex items-center gap-2 text-lg font-semibold text-red-600">
           <AlertTriangle size={20} /> Données du réseau invalides
         </h1>
         <p className="mb-4 text-sm text-ink/80">
@@ -67,7 +67,7 @@ function DataErrorScreen() {
         </p>
         <ul className="space-y-1 text-sm">
           {issues.map((i, k) => (
-            <li key={k} className={i.level === 'error' ? 'text-red-300' : 'text-amber-300'}>
+            <li key={k} className={i.level === 'error' ? 'text-red-600' : 'text-amber-700'}>
               <code className="mr-2 text-xs opacity-70">{i.code}</code>
               {i.message}
             </li>
@@ -89,7 +89,7 @@ function Toasts() {
   return (
     <div className="pointer-events-none fixed right-4 top-14 z-[120] flex w-96 flex-col gap-2">
       {storageError && (
-        <div className="pointer-events-auto rounded-lg border border-amber-500/40 bg-amber-950/90 px-3 py-2 text-xs text-amber-200 shadow-xl">
+        <div className="pointer-events-auto rounded-lg border border-amber-500/40 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow-xl">
           {storageError}
         </div>
       )}
@@ -98,9 +98,9 @@ function Toasts() {
           role="status"
           className={cx(
             'pointer-events-auto flex items-start gap-2 rounded-lg border px-3 py-2 text-xs shadow-xl',
-            notice.level === 'error' && 'border-red-500/50 bg-red-950/95 text-red-100',
-            notice.level === 'success' && 'border-emerald-500/50 bg-emerald-950/95 text-emerald-100',
-            notice.level === 'info' && 'border-sky-500/40 bg-[#0b1a2e]/95 text-sky-100',
+            notice.level === 'error' && 'border-red-500/50 bg-red-50 text-red-800',
+            notice.level === 'success' && 'border-emerald-500/50 bg-emerald-50 text-emerald-800',
+            notice.level === 'info' && 'border-sky-500/40 bg-white text-sky-800',
           )}
         >
           {notice.level === 'error' ? <AlertTriangle size={14} /> : notice.level === 'success' ? <CheckCircle2 size={14} /> : <Info size={14} />}

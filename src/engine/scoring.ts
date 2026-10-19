@@ -82,7 +82,7 @@ export const MEDAL_THRESHOLDS = { or: 850, argent: 700 } as const;
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
 /** Marges de tolérance pour juger la congestion « résorbée » par rapport à la référence. */
-export const CLEARANCE_MARGIN = { saturatedSegments: 2, waitingRatio: 1.1, waitingAbsolute: 300 };
+export const CLEARANCE_MARGIN = { saturatedSegments: 1, waitingRatio: 1.03, waitingAbsolute: 200 };
 
 /**
  * Délai de résorption (minutes) après la fin du dernier incident : premier instant où le nombre de
@@ -139,6 +139,7 @@ export function summarizeRun(params: {
     serviceQualityMean: mean(history.map((h) => h.serviceQuality)),
     waitingEnd: kpis.waiting,
     congestionClearedAfterIncidents: congestionClearance(history, params.referenceHistory),
+    affectedDelay: kpis.affectedDelay,
   };
 }
 
@@ -167,6 +168,8 @@ export function objectiveValue(objective: ObjectiveDefinition, s: RunSummary): n
       return s.serviceQualityMean;
     case 'waitingEnd':
       return s.waitingEnd;
+    case 'affectedDelay':
+      return s.affectedDelay / 60;
   }
 }
 

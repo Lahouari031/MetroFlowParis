@@ -7,16 +7,23 @@ export interface SegmentVisual {
   id: string;
   path: string;
   lineColor: string;
-  /** Couleur de l'indicateur (gaine), null si les flux sont masqués. */
+  /** Mode « Charge » : couleur de l'indicateur à la place de la couleur de ligne. */
   metricColor: string | null;
+  /** Mode « Plan » : halo de congestion sous la ligne (null si fluide). */
+  haloColor: string | null;
+  haloStrong: boolean;
   available: boolean;
   disrupted: boolean;
   overCapacity: boolean;
   selected: boolean;
   hovered: boolean;
+  /** Épaisseurs (unités de carte) selon le zoom. */
+  width: number;
+  haloWidth: number;
+  hitWidth: number;
 }
 
-/** Tronçon : zone de clic, gaine colorée selon l'indicateur, cœur à la couleur de la ligne. */
+/** Tronçon : halo de congestion éventuel, trait de ligne épais, zone de clic élargie. */
 export const MetroSegment = memo(function MetroSegment({
   v,
   onSelect,
@@ -29,35 +36,45 @@ export const MetroSegment = memo(function MetroSegment({
   return (
     <g>
       {(v.selected || v.hovered) && (
-        <path d={v.path} fill="none" stroke="#7dd3fc" strokeOpacity={v.selected ? 0.55 : 0.3} strokeWidth={17} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={v.path} fill="none" stroke="#1E1E1E" strokeOpacity={v.selected ? 0.25 : 0.12} strokeWidth={v.haloWidth * 1.3} strokeLinecap="round" strokeLinejoin="round" />
       )}
-      <path
-        d={v.path}
-        fill="none"
-        stroke={v.metricColor ?? '#0a1020'}
-        strokeWidth={v.metricColor ? 11 : 8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={v.overCapacity ? 'over-capacity' : undefined}
-        style={{ transition: 'stroke 600ms linear' }}
-      />
+      {v.haloColor && v.available && (
+        <path
+          d={v.path}
+          fill="none"
+          stroke={v.haloColor}
+          strokeOpacity={v.haloStrong ? 0.6 : 0.35}
+          strokeWidth={v.haloStrong ? v.haloWidth * 1.3 : v.haloWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={v.overCapacity ? 'over-capacity' : undefined}
+        />
+      )}
       {v.available ? (
-        <path d={v.path} fill="none" stroke={v.lineColor} strokeWidth={4.6} strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d={v.path}
+          fill="none"
+          stroke={v.metricColor ?? v.lineColor}
+          strokeWidth={v.width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={v.metricColor && v.overCapacity ? 'over-capacity' : undefined}
+          style={{ transition: 'stroke 600ms linear' }}
+        />
       ) : (
         <>
-          <path d={v.path} fill="none" stroke="#3b4354" strokeWidth={4.6} strokeLinecap="round" strokeLinejoin="round" />
-          <path d={v.path} fill="none" stroke="#ff2d55" strokeWidth={3} strokeDasharray="6 5" strokeLinecap="butt" />
+          <path d={v.path} fill="none" stroke="#C9C3B8" strokeWidth={v.width} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={v.path} fill="none" stroke="#E5383B" strokeWidth={v.width * 0.45} strokeDasharray={`${v.width} ${v.width * 0.8}`} />
         </>
       )}
       {v.disrupted && v.available && (
-        <path d={v.path} fill="none" stroke="#fbbf24" strokeWidth={1.4} strokeDasharray="2 4" strokeLinecap="round" opacity={0.95} />
+        <path d={v.path} fill="none" stroke="#1E1E1E" strokeWidth={v.width * 0.3} strokeDasharray={`0.1 ${v.width}`} strokeLinecap="round" />
       )}
-      {/* Zone de clic élargie */}
       <path
         d={v.path}
         fill="none"
         stroke="transparent"
-        strokeWidth={16}
+        strokeWidth={v.hitWidth}
         style={{ cursor: 'pointer' }}
         onClick={(e) => {
           e.stopPropagation();
@@ -70,24 +87,3 @@ export const MetroSegment = memo(function MetroSegment({
     </g>
   );
 }, sameVisual);
-
-/** Particules animées représentant symboliquement le sens et l'intensité des flux. */
-export const FlowParticles = memo(function FlowParticles({ path, intensity }: { path: string; intensity: number }) {
-  if (intensity < 0.04) return null;
-  // Vitesse quantifiée pour éviter les sauts d'animation à chaque mise à jour.
-  const bucket = Math.min(5, Math.floor(intensity * 6));
-  const duration = [2.6, 2.1, 1.7, 1.35, 1.05, 0.8][bucket];
-  return (
-    <path
-      d={path}
-      fill="none"
-      stroke="#f8fafc"
-      strokeWidth={2.1}
-      strokeLinecap="round"
-      strokeDasharray="0.01 11.99"
-      opacity={0.35 + 0.55 * Math.min(1, intensity)}
-      className="flow-particles"
-      style={{ animationDuration: `${duration}s` }}
-    />
-  );
-});

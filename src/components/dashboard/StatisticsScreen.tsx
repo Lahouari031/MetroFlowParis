@@ -7,11 +7,13 @@ import { loadNetwork } from '@/data/network';
 import { SCENARIOS } from '@/data/scenarios';
 import { INCIDENT_TYPE_INFO } from '@/engine/incidentManager';
 import { SATURATION_ALERT } from '@/engine/simulationEngine';
-import { runComparison, type Variant, type VariantResult } from '@/lib/comparison';
+import type { Variant, VariantResult } from '@/lib/comparison';
+import { controller } from '@/lib/simulationController';
 import { fmtClock, fmtInt, fmtMin, fmtNum, fmtPct, levelColor, saturationLevel } from '@/lib/metrics';
 import { loadRuns } from '@/lib/persistence';
 import { useSettings } from '@/store/settingsStore';
 import { useSelection, useSimulation } from '@/store/simulationStore';
+import { NO_INCIDENTS } from '@/store/simulationStore';
 import type { Incident, IncidentType } from '@/types/incident';
 import type { LineId } from '@/types/network';
 import type { RecordedRun, RunSummary } from '@/types/scenario';
@@ -28,7 +30,7 @@ export function StatisticsScreen() {
   const segSeries = useSimulation((s) => s.segmentSeries);
   const refSegSeries = useSimulation((s) => s.refSegmentSeries);
   const stSeries = useSimulation((s) => s.stationSeries);
-  const incidents = useSimulation((s) => s.snapshot?.incidents ?? []);
+  const incidents = useSimulation((s) => s.snapshot?.incidents ?? NO_INCIDENTS);
   const actions = useSimulation((s) => s.actions);
   const thresholds = useSettings((s) => s.thresholds);
 
@@ -272,7 +274,7 @@ export function StatisticsScreen() {
                       <LineBadge line={l.line.id} size={16} />
                     </td>
                     <td className="tabular text-right">{fmtPct(l.mean)}</td>
-                    <td className={cx('tabular text-right', l.refMean !== null && l.mean - l.refMean > 0.02 ? 'text-red-300' : 'text-muted')}>
+                    <td className={cx('tabular text-right', l.refMean !== null && l.mean - l.refMean > 0.02 ? 'text-red-600' : 'text-muted')}>
                       {l.refMean !== null ? `${l.mean - l.refMean >= 0 ? '+' : ''}${fmtNum((l.mean - l.refMean) * 100, 1)} pts` : '—'}
                     </td>
                     <td className="tabular text-right" style={{ color: levelColor(saturationLevel(l.max, thresholds)) }}>
@@ -298,7 +300,7 @@ export function StatisticsScreen() {
                     <CartesianGrid stroke={CHART.grid} vertical={false} />
                     <XAxis dataKey="time" type="number" domain={['dataMin', 'dataMax']} tickFormatter={(t) => fmtClock(t)} {...axis} minTickGap={30} />
                     <YAxis {...axis} allowDecimals={false} width={40} />
-                    <Tooltip formatter={(v, n) => [`${v} tronçon(s)`, n]} labelFormatter={(t) => fmtClock(Number(t))} contentStyle={{ background: CHART.tooltipBg, border: '1px solid #2b3d5c', fontSize: 11 }} />
+                    <Tooltip formatter={(v, n) => [`${v} tronçon(s)`, n]} labelFormatter={(t) => fmtClock(Number(t))} contentStyle={{ background: CHART.tooltipBg, border: '1px solid #e6e1d7', fontSize: 11 }} />
                     {filteredIncidents.map((inc) => (
                       <ReferenceArea
                         key={inc.id}
@@ -395,7 +397,7 @@ function WaitChart({ history, refHistory }: { history: HistoryPoint[]; refHistor
         <Tooltip
           formatter={(v, n) => [`${Number(v).toFixed(2)} min`, n]}
           labelFormatter={(t) => fmtClock(Number(t))}
-          contentStyle={{ background: CHART.tooltipBg, border: '1px solid #2b3d5c', fontSize: 11 }}
+          contentStyle={{ background: CHART.tooltipBg, border: '1px solid #e6e1d7', fontSize: 11 }}
         />
         {refHistory && <Line dataKey="refDelay" name="Retard (réf.)" stroke={CHART.reference} strokeDasharray="4 3" strokeWidth={1.5} dot={false} isAnimationActive={false} />}
         {refHistory && <Line dataKey="refWait" name="Attente (réf.)" stroke="#64748b" strokeDasharray="1 3" strokeWidth={1.5} dot={false} isAnimationActive={false} />}
@@ -469,7 +471,7 @@ function RegulationPerformance({ actions, history, refHistory }: { actions: SimA
             const dWait = avg((h) => h.avgWait);
             const lastPt = pts[pts.length - 1];
             const dCost = lastPt ? lastPt.operatingCost - refMap.get(lastPt.time)!.operatingCost : NaN;
-            const cls = (v: number) => (!Number.isFinite(v) ? 'text-faint' : v < -1e-3 ? 'text-emerald-300' : v > 1e-3 ? 'text-red-300' : 'text-muted');
+            const cls = (v: number) => (!Number.isFinite(v) ? 'text-faint' : v < -1e-3 ? 'text-emerald-700' : v > 1e-3 ? 'text-red-600' : 'text-muted');
             return (
               <tr key={i} className="border-t border-edge">
                 <td className="tabular py-1">{fmtClock(a.time)}</td>
@@ -576,7 +578,7 @@ function ComparisonTool() {
     };
     try {
       setBusy(0);
-      const r = await runComparison(network, scenarioId, [A, B], (p) => setBusy(p));
+      const r = await controller.compare(scenarioId, [A, B], (p) => setBusy(p));
       setResults(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -669,7 +671,7 @@ function ComparisonTool() {
           {runs.length === 0 && <span className="text-[10px] text-faint">Astuce : « Enregistrer pour comparer » (écran Scénarios ou bilan) ajoute des parties à cette liste.</span>}
         </div>
       )}
-      {error && <p className="text-red-300">{error}</p>}
+      {error && <p className="text-red-600">{error}</p>}
       {pair && (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           <table className="w-full">
@@ -693,7 +695,7 @@ function ComparisonTool() {
                     <td className="py-1">{r.label}</td>
                     <td className="tabular text-right">{r.fmt(va)}</td>
                     <td className="tabular text-right">{r.fmt(vb)}</td>
-                    <td className={cx('tabular text-right', better === null ? 'text-muted' : better ? 'text-emerald-300' : 'text-red-300')}>
+                    <td className={cx('tabular text-right', better === null ? 'text-muted' : better ? 'text-emerald-700' : 'text-red-600')}>
                       {d >= 0 ? '+' : '−'}
                       {r.fmt(Math.abs(d))}
                     </td>
@@ -718,7 +720,7 @@ function ComparisonTool() {
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis dataKey="time" type="number" domain={['dataMin', 'dataMax']} tickFormatter={(t) => fmtClock(t)} {...axis} minTickGap={30} />
                 <YAxis {...axis} width={48} tickFormatter={(v) => mfmt(Number(v))} />
-                <Tooltip formatter={(v, n) => [mfmt(Number(v)), n]} labelFormatter={(t) => fmtClock(Number(t))} contentStyle={{ background: CHART.tooltipBg, border: '1px solid #2b3d5c', fontSize: 11 }} />
+                <Tooltip formatter={(v, n) => [mfmt(Number(v)), n]} labelFormatter={(t) => fmtClock(Number(t))} contentStyle={{ background: CHART.tooltipBg, border: '1px solid #e6e1d7', fontSize: 11 }} />
                 <Line dataKey="a" name={`A — ${pair[0].label}`} stroke={CHART.reference} strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
                 <Line dataKey="b" name={`B — ${pair[1].label}`} stroke={CHART.primary} strokeWidth={2} dot={false} isAnimationActive={false} />
                 <Legend iconType="plainline" wrapperStyle={{ fontSize: 10, color: CHART.axis }} />

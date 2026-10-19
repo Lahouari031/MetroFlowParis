@@ -1,20 +1,23 @@
 'use client';
 
-import { Expand, Layers, Minus, Plus } from 'lucide-react';
+import { BookOpen, Expand, Layers, Minus, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { controller } from '@/lib/simulationController';
 import { mapCommands } from '@/store/mapViewStore';
 import { useSettings, type FlowMode, type Layers as LayerSet, type MapMetric } from '@/store/settingsStore';
 import { cx, Segmented, Toggle } from '../ui/primitives';
+import { LegendContent } from './MapLegend';
 
 const LAYER_LABELS: [keyof LayerSet, string][] = [
+  ['trains', 'Rames en circulation'],
+  ['crowds', 'Voyageurs en attente'],
   ['labels', 'Noms des stations'],
+  ['geography', 'Seine, bois et monuments'],
   ['lineNumbers', 'Numéros de ligne'],
   ['interchanges', 'Correspondances'],
-  ['flows', 'Flux (couleurs)'],
-  ['particles', 'Particules animées'],
+  ['flows', 'Couleurs de charge'],
   ['incidents', 'Incidents'],
-  ['routes', 'Itinéraires sélectionnés'],
+  ['routes', 'Itinéraire calculé'],
   ['minimap', 'Mini-carte'],
 ];
 
@@ -25,8 +28,9 @@ export const METRIC_OPTIONS: { value: MapMetric; label: string; title: string }[
   { value: 'variation', label: 'Variation', title: 'Variation du flux par rapport à la simulation de référence (sans intervention)' },
 ];
 
+/** Barre de commandes du plan (haut, centrée) : mode d'affichage, zoom, couches, légende. */
 export function MapControls() {
-  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<'layers' | 'legend' | null>(null);
   const layers = useSettings((s) => s.layers);
   const setLayer = useSettings((s) => s.setLayer);
   const flowMode = useSettings((s) => s.flowMode);
@@ -34,23 +38,42 @@ export function MapControls() {
   const heatOpacity = useSettings((s) => s.heatOpacity);
   const referenceEnabled = useSettings((s) => s.referenceEnabled);
   const set = useSettings((s) => s.set);
+  const mode: FlowMode = flowMode === 'mixed' ? 'heatmap' : flowMode;
 
   return (
-    <>
-      <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-        <div className="rounded-lg border border-edge bg-panel/90 p-1 shadow-lg backdrop-blur">
-          <Segmented<FlowMode>
-            value={flowMode}
-            onChange={(v) => set('flowMode', v)}
-            options={[
-              { value: 'segments', label: 'Tronçons', title: 'Mode A : couleur des tronçons' },
-              { value: 'heatmap', label: 'Densité', title: 'Mode B : densité autour des stations' },
-              { value: 'mixed', label: 'Mixte', title: 'Tronçons + densité' },
-            ]}
-          />
-        </div>
-        <div className="rounded-lg border border-edge bg-panel/90 p-1 shadow-lg backdrop-blur">
+    <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-edge bg-white/95 p-1 shadow-sm backdrop-blur">
+        <Segmented<FlowMode>
+          value={mode}
+          onChange={(v) => set('flowMode', v)}
+          options={[
+            { value: 'plan', label: 'Plan', title: 'Couleurs des lignes ; halo orange/rouge sur les tronçons chargés' },
+            { value: 'segments', label: 'Charge', title: 'Lignes colorées selon l’indicateur choisi' },
+            { value: 'heatmap', label: 'Affluence', title: 'Densité de voyageurs autour des stations' },
+          ]}
+        />
+        <span className="mx-0.5 h-5 w-px bg-edge" />
+        <IconBtn label="Zoomer" onClick={() => mapCommands.zoomBy(1.4)}>
+          <Plus size={15} />
+        </IconBtn>
+        <IconBtn label="Dézoomer" onClick={() => mapCommands.zoomBy(1 / 1.4)}>
+          <Minus size={15} />
+        </IconBtn>
+        <IconBtn label="Vue complète" onClick={() => mapCommands.fit()}>
+          <Expand size={14} />
+        </IconBtn>
+        <IconBtn label="Couches d'affichage" active={panel === 'layers'} onClick={() => setPanel(panel === 'layers' ? null : 'layers')}>
+          <Layers size={14} />
+        </IconBtn>
+        <IconBtn label="Légende" active={panel === 'legend'} onClick={() => setPanel(panel === 'legend' ? null : 'legend')}>
+          <BookOpen size={14} />
+        </IconBtn>
+      </div>
+
+      {mode === 'segments' && (
+        <div className="pointer-events-auto rounded-xl border border-edge bg-white/95 p-1 shadow-sm backdrop-blur">
           <Segmented<MapMetric>
+            size="xs"
             value={metric}
             onChange={(v) => {
               if (v === 'variation' && !referenceEnabled) controller.setReferenceEnabled(true);
@@ -59,56 +82,48 @@ export function MapControls() {
             options={METRIC_OPTIONS}
           />
         </div>
-        {flowMode !== 'segments' && (
-          <label className="flex items-center gap-2 rounded-lg border border-edge bg-panel/90 px-2 py-1 text-[11px] text-muted shadow-lg backdrop-blur">
-            Opacité densité
-            <input type="range" min={0.15} max={1} step={0.05} value={heatOpacity} onChange={(e) => set('heatOpacity', Number(e.target.value))} className="w-24" />
-          </label>
-        )}
-      </div>
+      )}
+      {mode === 'heatmap' && (
+        <label className="pointer-events-auto flex items-center gap-2 rounded-xl border border-edge bg-white/95 px-3 py-1 text-[11px] text-muted shadow-sm">
+          Opacité
+          <input type="range" min={0.15} max={1} step={0.05} value={heatOpacity} onChange={(e) => set('heatOpacity', Number(e.target.value))} className="w-24" />
+          <span className="flex items-center gap-1">
+            <input type="checkbox" checked={flowMode === 'mixed'} onChange={(e) => set('flowMode', e.target.checked ? 'mixed' : 'heatmap')} /> + charge des lignes
+          </span>
+        </label>
+      )}
 
-      <div className="absolute right-3 top-3 flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
-        <div className="flex flex-col overflow-hidden rounded-lg border border-edge bg-panel/90 shadow-lg backdrop-blur">
-          <CtlButton label="Zoomer" onClick={() => mapCommands.zoomBy(1.4)}>
-            <Plus size={15} />
-          </CtlButton>
-          <CtlButton label="Dézoomer" onClick={() => mapCommands.zoomBy(1 / 1.4)}>
-            <Minus size={15} />
-          </CtlButton>
-          <CtlButton label="Vue complète" onClick={() => mapCommands.fit()}>
-            <Expand size={14} />
-          </CtlButton>
-          <CtlButton label="Couches d'affichage" active={open} onClick={() => setOpen((o) => !o)}>
-            <Layers size={14} />
-          </CtlButton>
-        </div>
-        {open && (
-          <div className="w-56 rounded-lg border border-edge bg-panel/95 p-3 shadow-xl backdrop-blur">
-            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">Couches</div>
-            {LAYER_LABELS.map(([k, label]) => (
-              <Toggle key={k} label={label} checked={layers[k]} onChange={(v) => setLayer(k, v)} />
-            ))}
-            <div className="mt-2 border-t border-edge pt-2">
-              <Toggle label="Simulation de référence" checked={referenceEnabled} onChange={(v) => controller.setReferenceEnabled(v)} />
-              <p className="mt-1 text-[10px] leading-snug text-faint">
-                Calcule en parallèle le même scénario sans vos interventions (comparaison avant/après). Désactivez-la pour alléger le calcul.
-              </p>
-            </div>
+      {panel === 'layers' && (
+        <div className="pointer-events-auto w-64 rounded-xl border border-edge bg-white p-3 shadow-lg">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">Couches</div>
+          {LAYER_LABELS.map(([k, label]) => (
+            <Toggle key={k} label={label} checked={layers[k]} onChange={(v) => setLayer(k, v)} />
+          ))}
+          <div className="mt-2 border-t border-edge pt-2">
+            <Toggle label="Simulation de référence" checked={referenceEnabled} onChange={(v) => controller.setReferenceEnabled(v)} />
+            <p className="mt-1 text-[10px] leading-snug text-faint">
+              Calcule en parallèle le même scénario sans vos interventions, pour comparer. Désactivez-la si l&apos;ordinateur peine.
+            </p>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+      {panel === 'legend' && (
+        <div className="pointer-events-auto w-72 rounded-xl border border-edge bg-white p-3 text-[11px] shadow-lg">
+          <LegendContent />
+        </div>
+      )}
+    </div>
   );
 }
 
-function CtlButton({ label, onClick, children, active }: { label: string; onClick: () => void; children: React.ReactNode; active?: boolean }) {
+function IconBtn({ label, onClick, children, active }: { label: string; onClick: () => void; children: React.ReactNode; active?: boolean }) {
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       onClick={onClick}
-      className={cx('flex h-8 w-8 items-center justify-center border-b border-edge last:border-0 hover:bg-panel-3', active ? 'text-accent' : 'text-ink/85')}
+      className={cx('flex h-7 w-7 items-center justify-center rounded-md transition-colors', active ? 'bg-ink text-white' : 'text-ink/80 hover:bg-panel-3')}
     >
       {children}
     </button>

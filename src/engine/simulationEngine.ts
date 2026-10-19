@@ -47,8 +47,8 @@ export const FLOW_WINDOW = 300;
 export const QUEUE_HORIZON = 600;
 /** Fenêtre de lissage des retards et attentes (s). */
 export const STAT_WINDOW = 600;
-/** Période de rafraîchissement des itinéraires selon l'encombrement (s). */
-export const CONGESTION_REFRESH = 300;
+/** Période de rafraîchissement des itinéraires selon l'encombrement (s), étalé sur la période. */
+export const CONGESTION_REFRESH = 900;
 /** Recalcul volontaire d'itinéraire si le gain dépasse max(REROUTE_SLACK, 20 % du coût). */
 export const REROUTE_SLACK = 300;
 /** Attente au-delà de laquelle un voyageur bloqué cherche une alternative (s). */
@@ -151,6 +151,9 @@ export class SimulationEngine {
   completedTrips = 0;
   lostTrips = 0;
   private affectedDone = 0;
+  /** Retard cumulé et nombre de trajets terminés des voyageurs affectés (pour le KPI ciblé). */
+  private affectedDelaySum = 0;
+  private affectedTrips = 0;
   operatingCost = 0;
   history: HistoryPoint[] = [];
   /** Saturation par tronçon, échantillonnée chaque minute (alignée sur history). */
@@ -236,6 +239,8 @@ export class SimulationEngine {
     this.completedTrips = 0;
     this.lostTrips = 0;
     this.affectedDone = 0;
+    this.affectedDelaySum = 0;
+    this.affectedTrips = 0;
     this.operatingCost = 0;
     for (const c of this.cohorts) c.affected = false;
     this.recordHistory();
@@ -280,7 +285,7 @@ export class SimulationEngine {
         if (a.spec.type === 'return_to_normal') {
           let n = 0;
           for (const inc of this.incidents) {
-            if ((inc.status === 'active' || inc.status === 'suspended') && incidentMatchesTarget(net, inc, a.spec.target)) {
+            if (inc.origin === 'user' && (inc.status === 'active' || inc.status === 'suspended') && incidentMatchesTarget(net, inc, a.spec.target)) {
               this.endIncident(inc, 'Levé par « Retour à la normale »');
               n++;
             }
@@ -300,6 +305,9 @@ export class SimulationEngine {
         const inc = this.incidents.find((i) => i.id === a.incidentId);
         if (!inc) return { ok: false, error: `Incident introuvable : ${a.incidentId}` };
         if (inc.status === 'resolved') return { ok: false, error: 'Incident déjà levé' };
+        if (inc.origin === 'scenario' && a.type !== 'incident.extend') {
+          return { ok: false, error: 'Incident imposé par le scénario : il ne peut pas être levé ni modifié. Limitez ses effets par la régulation.' };
+        }
         if (a.type === 'incident.resolve') {
           this.endIncident(inc, 'Levé par le régulateur');
           this.log('success', `Incident levé : ${inc.label}`, { incidentId: inc.id });
@@ -470,11 +478,13 @@ export class SimulationEngine {
       this.lastStuckCheck = now;
       this.checkStuckCohorts(now);
     }
-    if (now - this.lastCongestionRefresh >= CONGESTION_REFRESH) {
+    // Mise à jour des coûts d'encombrement toutes les minutes ; les arbres de plus courts
+    // chemins sont rafraîchis progressivement (quelques origines par pas) sur CONGESTION_REFRESH.
+    if (now - this.lastCongestionRefresh >= 60) {
       this.lastCongestionRefresh = now;
       this.router.update(this.state, this.edgeSaturation, false);
-      this.router.refreshSome(this.network.stations.length);
     }
+    this.router.refreshSome(Math.ceil((this.network.stations.length * dt) / CONGESTION_REFRESH));
 
     this.time += dt;
     this.tick++;
@@ -773,7 +783,11 @@ export class SimulationEngine {
     this.delayWeight += c.size;
     this.completedTrips += c.size;
     this.exitsTick[c.station] += c.size;
-    if (c.affected) this.affectedDone += c.size;
+    if (c.affected) {
+      this.affectedDone += c.size;
+      this.affectedDelaySum += delay * c.size;
+      this.affectedTrips += c.size;
+    }
     this.removeCohort(i);
   }
 
@@ -1099,6 +1113,7 @@ export class SimulationEngine {
       lostTrips: this.lostTrips,
       operatingCost: this.operatingCost,
       trainsInService: trains,
+      affectedDelay: this.affectedTrips > 1e-6 ? this.affectedDelaySum / this.affectedTrips : 0,
     };
   }
 
@@ -1172,6 +1187,7 @@ export class SimulationEngine {
       edgeCapacity,
       edgeQueue: Float32Array.from(this.edgeQueue),
       edgeDelay,
+      edgeTravelTime: Float32Array.from(st.edgeTravelTime),
       segmentSaturation,
       segmentFlow,
       segmentDelay,

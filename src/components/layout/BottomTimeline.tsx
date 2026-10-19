@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from 'react';
 import { controller } from '@/lib/simulationController';
 import { fmtClock } from '@/lib/metrics';
 import { useSimulation } from '@/store/simulationStore';
+import { NO_INCIDENTS } from '@/store/simulationStore';
 import { useSelection } from '@/store/simulationStore';
 import type { EventLevel } from '@/types/simulation';
 import { Button, ConfirmDialog, cx, Segmented } from '../ui/primitives';
@@ -17,17 +18,17 @@ const LEVEL_ICON: Record<EventLevel, typeof Info> = {
   success: CheckCircle2,
 };
 const LEVEL_COLOR: Record<EventLevel, string> = {
-  info: 'text-sky-300',
-  warning: 'text-amber-300',
-  critical: 'text-red-400',
-  success: 'text-emerald-300',
+  info: 'text-sky-700',
+  warning: 'text-amber-700',
+  critical: 'text-red-600',
+  success: 'text-emerald-700',
 };
 
 export function BottomTimeline() {
   const start = useSimulation((s) => s.startTime);
   const end = useSimulation((s) => s.endTime);
   const time = useSimulation((s) => s.snapshot?.time ?? s.startTime);
-  const incidents = useSimulation((s) => s.snapshot?.incidents ?? []);
+  const incidents = useSimulation((s) => s.snapshot?.incidents ?? NO_INCIDENTS);
   const actions = useSimulation((s) => s.actions);
   const events = useSimulation((s) => s.events);
   const speed = useSimulation((s) => s.speed);

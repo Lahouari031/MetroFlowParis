@@ -59,7 +59,7 @@ export function KPIGrid({ compact = false }: { compact?: boolean }) {
             </div>
             <div className="flex items-center gap-1 text-[9px] text-faint">
               {delta !== null && (
-                <span className={cx('flex items-center', good === null ? 'text-muted' : good ? 'text-emerald-400' : 'text-red-400')} title="Écart avec la simulation de référence (même scénario sans vos interventions)">
+                <span className={cx('flex items-center', good === null ? 'text-muted' : good ? 'text-emerald-600' : 'text-red-600')} title="Écart avec la simulation de référence (même scénario sans vos interventions)">
                   {delta > 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
                   {fmtPct(Math.abs(delta))} vs réf.
                 </span>

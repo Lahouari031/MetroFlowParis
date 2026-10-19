@@ -26,12 +26,12 @@ import { useSelection, useSimulation } from '@/store/simulationStore';
 import type { HistoryPoint } from '@/types/simulation';
 
 export const CHART = {
-  primary: '#38bdf8',
-  secondary: '#a78bfa',
-  reference: '#94a3b8',
-  grid: '#1c2940',
-  axis: '#5b6b85',
-  tooltipBg: '#0b1322',
+  primary: '#2563eb',
+  secondary: '#9333ea',
+  reference: '#9ca3af',
+  grid: '#ebe6dc',
+  axis: '#8d939b',
+  tooltipBg: '#ffffff',
 };
 
 const axisProps = {

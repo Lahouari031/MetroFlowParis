@@ -16,23 +16,41 @@ import {
   stepLevel,
   variationColor,
 } from '@/lib/metrics';
-import { useMapView, mapCommands } from '@/store/mapViewStore';
+import { mapCommands, useMapView } from '@/store/mapViewStore';
 import { useSettings } from '@/store/settingsStore';
 import { useSelection, useSimulation } from '@/store/simulationStore';
 import type { Incident } from '@/types/incident';
 import type { Network } from '@/types/network';
 import { getGeometry } from './geometry';
+import { GeographyLayer } from './GeographyLayer';
 import { IncidentMarker, SlowdownGlyph } from './IncidentMarker';
 import { MapControls } from './MapControls';
-import { MapLegend } from './MapLegend';
-import { FlowParticles, MetroSegment, type SegmentVisual } from './MetroSegment';
+import { MetroSegment, type SegmentVisual } from './MetroSegment';
 import { MiniMap } from './MiniMap';
-import { StationNode, type StationVisual } from './StationNode';
+import { MAP_COLORS } from './palette';
+import { StationLabel, StationNode, type StationVisual } from './StationNode';
+import { mapSizes } from './sizes';
+import { TrainLayer } from './TrainLayer';
 
-const MIN_K = 0.25;
-const MAX_K = 6;
-/** En dessous de ce zoom, seules les étiquettes des correspondances et terminus sont affichées. */
-const LABEL_ZOOM = 0.75;
+const MIN_K = 0.2;
+const MAX_K = 5;
+/** Voyageurs en attente représentés par un point sur le quai. */
+const PASSENGERS_PER_DOT = 60;
+/** Importance d'une station pour l'affichage des noms (3 = grand pôle, 0 = station simple). */
+function rank(st: { id: string; lines: string[]; isTerminus: boolean }): number {
+  if (MAJOR_STATIONS.has(st.id)) return 3;
+  if (st.lines.length >= 2) return 2;
+  if (st.isTerminus) return 1;
+  return 0;
+}
+
+/** Grands pôles nommés même en vue d'ensemble. */
+const MAJOR_STATIONS = new Set([
+  'chatelet', 'gare-du-nord', 'gare-de-l-est', 'saint-lazare', 'gare-de-lyon', 'montparnasse-bienvenue', 'republique',
+  'nation', 'bastille', 'la-defense', 'charles-de-gaulle-etoile', 'place-d-italie', 'denfert-rochereau', 'opera',
+  'concorde', 'trocadero', 'gare-d-austerlitz', 'la-motte-picquet-grenelle', 'barbes-rochechouart', 'saint-denis-pleyel',
+  'aeroport-d-orly', 'porte-maillot', 'bercy', 'stalingrad',
+]);
 
 type Hover = { kind: 'station' | 'segment'; id: string; x: number; y: number } | null;
 
@@ -41,8 +59,8 @@ export function MetroMap() {
   const geo = useMemo(() => getGeometry(network), [network]);
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
-  const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const [k, setK] = useState(1);
+  const labelRef = useRef<SVGGElement>(null);
+  const [k, setK] = useState(0.4);
   const [hover, setHover] = useState<Hover>(null);
 
   const snapshot = useSimulation((s) => s.snapshot);
@@ -60,34 +78,43 @@ export function MetroMap() {
 
   const applyTransform = useCallback((t: ZoomTransform) => {
     gRef.current?.setAttribute('transform', t.toString());
+    labelRef.current?.setAttribute('transform', t.toString());
     useMapView.getState().set({ k: t.k, x: t.x, y: t.y });
-    setK((prev) => ((prev < LABEL_ZOOM) !== (t.k < LABEL_ZOOM) || Math.abs(prev - t.k) > 0.5 ? t.k : prev));
+    // Palier de zoom (rendu des étiquettes et tailles) : mis à jour seulement par crans.
+    const bucket = Math.round(t.k * 20) / 20;
+    setK((prev) => (prev === bucket ? prev : bucket));
   }, []);
 
   const fitTransform = useCallback(() => {
     const svg = svgRef.current;
     if (!svg) return zoomIdentity;
     const { width, height } = svg.getBoundingClientRect();
+    // Cadre par défaut : Paris intra-muros et proche banlieue, centré entre les panneaux latéraux.
+    const c = { x: -1200, y: -800, width: 2450, height: 1650 };
+    const padL = width > 1000 ? 280 : 0;
+    const padR = width > 1000 ? 316 : 0;
+    const w = width - padL - padR;
+    const scale = Math.min(w / c.width, (height - 40) / c.height);
+    return zoomIdentity.translate(padL + w / 2 - (c.x + c.width / 2) * scale, height / 2 - (c.y + c.height / 2) * scale).scale(scale);
+  }, []);
+
+  const fullTransform = useCallback(() => {
+    const svg = svgRef.current;
+    if (!svg) return zoomIdentity;
+    const { width, height } = svg.getBoundingClientRect();
     const c = geo.content;
     const scale = Math.min(width / c.width, height / c.height) * 0.98;
-    return zoomIdentity
-      .translate(width / 2 - (c.x + c.width / 2) * scale, height / 2 - (c.y + c.height / 2) * scale)
-      .scale(scale);
+    return zoomIdentity.translate(width / 2 - (c.x + c.width / 2) * scale, height / 2 - (c.y + c.height / 2) * scale).scale(scale);
   }, [geo]);
 
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
-    const z = d3zoom<SVGSVGElement, unknown>()
+    const z: ZoomBehavior<SVGSVGElement, unknown> = d3zoom<SVGSVGElement, unknown>()
       .scaleExtent([MIN_K, MAX_K])
       .clickDistance(4)
-      .filter((event: Event) => {
-        // Pas de zoom au double-clic (réservé au centrage sur une station), molette et glisser autorisés.
-        if (event.type === 'dblclick') return false;
-        return !(event as MouseEvent).button;
-      })
+      .filter((event: Event) => event.type !== 'dblclick' && !(event as MouseEvent).button)
       .on('zoom', (event: { transform: ZoomTransform }) => applyTransform(event.transform));
-    zoomRef.current = z;
     const sel = select(svg);
     sel.call(z);
     const resize = () => {
@@ -100,11 +127,10 @@ export function MetroMap() {
     ro.observe(svg);
 
     mapCommands.zoomBy = (f) => sel.transition().duration(220).call(z.scaleBy, f);
-    mapCommands.fit = () => sel.transition().duration(350).call(z.transform, fitTransform());
+    mapCommands.fit = () => sel.transition().duration(400).call(z.transform, fullTransform());
     mapCommands.centerOn = (x, y, kk) => {
       const r = svg.getBoundingClientRect();
-      const cur = useMapView.getState().k;
-      const scale = kk ?? Math.max(cur, 2.2);
+      const scale = kk ?? Math.max(useMapView.getState().k, 1.6);
       sel
         .transition()
         .duration(450)
@@ -114,7 +140,7 @@ export function MetroMap() {
       ro.disconnect();
       sel.on('.zoom', null);
     };
-  }, [applyTransform, fitTransform]);
+  }, [applyTransform, fitTransform, fullTransform]);
 
   useEffect(() => {
     if (!focus) return;
@@ -144,7 +170,7 @@ export function MetroMap() {
     (id: string) => {
       useSelection.getState().select({ kind: 'station', id });
       const st = network.stationById.get(id);
-      if (st) mapCommands.centerOn(st.x, st.y, Math.max(useMapView.getState().k * 1.6, 2.4));
+      if (st) mapCommands.centerOn(st.x, st.y, Math.max(useMapView.getState().k * 1.8, 1.8));
     },
     [network],
   );
@@ -157,47 +183,31 @@ export function MetroMap() {
 
   /* ------------------------------------------------------------ données dérivées */
 
-  const showSegmentsMetric = layers.flows && flowMode !== 'heatmap';
-  const showHeat = layers.flows && flowMode !== 'segments';
+  const chargeMode = layers.flows && (flowMode === 'segments' || flowMode === 'mixed');
+  const planMode = layers.flows && flowMode === 'plan';
+  const showHeat = layers.flows && (flowMode === 'heatmap' || flowMode === 'mixed');
 
-  const segmentMetric = useCallback(
-    (i: number): number => {
-      if (!snapshot) return 0;
+  const metricColor = useCallback(
+    (i: number): string => {
+      if (!snapshot) return '#999';
       switch (metric) {
         case 'saturation':
-          return snapshot.segmentSaturation[i];
+          return levelColor(saturationLevel(snapshot.segmentSaturation[i], thresholds));
         case 'flow':
-          return snapshot.segmentFlow[i];
+          return levelColor(stepLevel(snapshot.segmentFlow[i], FLOW_STEPS));
         case 'delay':
-          return snapshot.segmentDelay[i];
+          return levelColor(stepLevel(snapshot.segmentDelay[i], DELAY_STEPS));
         case 'variation': {
           const ref = refSnapshot?.segmentFlow[i];
-          if (ref === undefined) return NaN;
-          return ref < 300 ? (snapshot.segmentFlow[i] < 300 ? 0 : 1) : (snapshot.segmentFlow[i] - ref) / ref;
+          if (ref === undefined) return '#999';
+          const v = ref < 300 ? (snapshot.segmentFlow[i] < 300 ? 0 : 1) : (snapshot.segmentFlow[i] - ref) / ref;
+          return variationColor(v);
         }
       }
     },
-    [snapshot, refSnapshot, metric],
+    [snapshot, refSnapshot, metric, thresholds],
   );
 
-  const colorFor = useCallback(
-    (i: number): string => {
-      const v = segmentMetric(i);
-      switch (metric) {
-        case 'saturation':
-          return levelColor(saturationLevel(v, thresholds));
-        case 'flow':
-          return levelColor(stepLevel(v, FLOW_STEPS));
-        case 'delay':
-          return levelColor(stepLevel(v, DELAY_STEPS));
-        case 'variation':
-          return variationColor(v);
-      }
-    },
-    [segmentMetric, metric, thresholds],
-  );
-
-  // Tronçons ralentis (effets de temps de parcours actifs).
   const slowedSegments = useMemo(() => {
     const out = new Set<string>();
     for (const inc of snapshot?.incidents ?? []) {
@@ -218,11 +228,9 @@ export function MetroMap() {
     return out;
   }, [snapshot?.incidents]);
 
-  const routeSegments = useMemo(() => {
-    if (!route) return null;
-    return route.edges.map((e) => network.edges[e].segment);
-  }, [route, network]);
+  const routeSegments = useMemo(() => (route ? route.edges.map((e) => network.edges[e].segment) : null), [route, network]);
 
+  const sz = mapSizes(k);
   const segmentVisuals: SegmentVisual[] = network.segments.map((seg) => {
     const line = network.lineById.get(seg.line)!;
     const sat = snapshot?.segmentSaturation[seg.index] ?? 0;
@@ -231,26 +239,72 @@ export function MetroMap() {
       id: seg.id,
       path: geo.segmentPath[seg.index],
       lineColor: line.color,
-      metricColor: showSegmentsMetric && available ? colorFor(seg.index) : null,
+      metricColor: chargeMode && available ? metricColor(seg.index) : null,
+      haloColor: planMode && sat >= thresholds[1] ? (sat >= thresholds[2] ? '#E5383B' : '#F59E0B') : null,
+      haloStrong: sat >= thresholds[2],
       available,
       disrupted: layers.incidents && slowedSegments.has(seg.id),
-      overCapacity: showSegmentsMetric && metric === 'saturation' && available && sat >= thresholds[3],
+      overCapacity: (planMode || (chargeMode && metric === 'saturation')) && available && sat >= thresholds[3],
       selected: selected?.kind === 'segment' && selected.id === seg.id,
       hovered: hover?.kind === 'segment' && hover.id === seg.id,
+      width: sz.line,
+      haloWidth: sz.halo,
+      hitWidth: sz.hit,
     };
   });
 
-  const stationVisuals: StationVisual[] = network.stations.map((st) => ({
-    station: st,
-    open: snapshot ? snapshot.stationOpen[st.index] === 1 : true,
-    disrupted: layers.incidents && disruptedStations.has(st.id),
-    selected: selected?.kind === 'station' && selected.id === st.id,
-    showLabel: layers.labels && (k >= LABEL_ZOOM || st.isInterchange || st.isTerminus),
-    strongLabel: st.isInterchange || st.isTerminus,
-    showInterchange: layers.interchanges,
-    routeEnd: !!route && (route.from === st.id || route.to === st.id),
-  }));
+  // Étiquettes : en vue d'ensemble, noms horizontaux des pôles placés par ordre d'importance
+  // sans chevauchement ; en zoomant, toutes les stations avec le placement précalculé.
+  const labelFont = sz.labelFont;
+  const horizontal = k < 1.1;
+  const visibleLabels = useMemo(() => {
+    const out = new Set<string>();
+    if (!layers.labels) return out;
+    if (!horizontal) {
+      for (const st of network.stations) out.add(st.id);
+      return out;
+    }
+    const boxes: [number, number, number, number][] = [];
+    const ranked = [...network.stations].sort((a, b) => rank(b) - rank(a));
+    for (const st of ranked) {
+      const tier = rank(st);
+      if (k < 0.6 && tier < 3) continue;
+      if (k < 0.85 && tier < 2) continue;
+      const font = labelFont * (tier >= 3 ? 1.05 : 0.95);
+      const x0 = st.x + sz.station + font * 0.3;
+      const box: [number, number, number, number] = [x0, st.y - font * 0.7, x0 + st.mapLabel.length * font * 0.56, st.y + font * 0.45];
+      if (boxes.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
+      boxes.push(box);
+      out.add(st.id);
+    }
+    return out;
+  }, [network, k, horizontal, labelFont, layers.labels, sz.station]);
 
+  const stationVisuals: StationVisual[] = network.stations.map((st) => {
+    const tier = rank(st);
+    const waiting = snapshot?.stationWaiting[st.index] ?? 0;
+    const load = snapshot?.stationLoad[st.index] ?? 0;
+    return {
+      station: st,
+      open: snapshot ? snapshot.stationOpen[st.index] === 1 : true,
+      disrupted: layers.incidents && disruptedStations.has(st.id),
+      selected: selected?.kind === 'station' && selected.id === st.id,
+      showLabel: visibleLabels.has(st.id),
+      strongLabel: tier >= 3,
+      fontSize: tier >= 3 ? labelFont * 1.05 : labelFont * 0.95,
+      horizontalLabel: horizontal,
+      radius: st.isInterchange && layers.interchanges ? sz.stationInterchange : sz.station,
+      strokeWidth: sz.stroke,
+      passengerR: sz.passenger,
+      passengerGap: sz.passengerGap,
+      showInterchange: layers.interchanges,
+      routeEnd: !!route && (route.from === st.id || route.to === st.id),
+      crowd: layers.crowds && k >= 0.7 ? Math.min(12, Math.round(waiting / PASSENGERS_PER_DOT)) : 0,
+      overcrowded: layers.crowds && load >= 1,
+    };
+  });
+
+  const markerScale = sz.marker;
   const incidentMarkers = useMemo(() => {
     if (!layers.incidents || !snapshot) return [];
     const placed = new Map<string, number>();
@@ -261,18 +315,17 @@ export function MetroMap() {
         const key = `${Math.round(p.x)},${Math.round(p.y)}`;
         const n = placed.get(key) ?? 0;
         placed.set(key, n + 1);
-        return { inc, x: p.x + n * 16, y: p.y };
+        return { inc, x: p.x + n * 24 * sz.marker, y: p.y - 20 * sz.marker };
       });
   }, [layers.incidents, snapshot, network, geo]);
 
   const heatGradients = ['low', 'moderate', 'high', 'veryHigh', 'over'] as const;
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(ellipse_at_center,#0c1526_0%,#060a13_75%)]">
+    <div className="relative h-full w-full overflow-hidden" style={{ background: MAP_COLORS.land }}>
       <svg
         ref={svgRef}
         className="h-full w-full touch-none select-none"
-        role="application"
         aria-label="Plan schématique interactif du métro (molette : zoom, glisser : déplacer, clic : sélectionner, double-clic : centrer)"
         onClick={() => {
           const sel = useSelection.getState();
@@ -280,104 +333,97 @@ export function MetroMap() {
         }}
       >
         <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M40 0H0V40" fill="none" stroke="#14203a" strokeWidth="0.6" />
-          </pattern>
           {heatGradients.map((lvl) => (
             <radialGradient key={lvl} id={`heat-${lvl}`}>
-              <stop offset="0%" stopColor={levelColor(lvl)} stopOpacity={0.85} />
-              <stop offset="55%" stopColor={levelColor(lvl)} stopOpacity={0.35} />
+              <stop offset="0%" stopColor={levelColor(lvl)} stopOpacity={0.75} />
+              <stop offset="60%" stopColor={levelColor(lvl)} stopOpacity={0.25} />
               <stop offset="100%" stopColor={levelColor(lvl)} stopOpacity={0} />
             </radialGradient>
           ))}
-          <filter id="route-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3" />
-          </filter>
         </defs>
         <g ref={gRef}>
-          <rect x={geo.content.x - 400} y={geo.content.y - 400} width={geo.content.width + 800} height={geo.content.height + 800} fill="url(#grid)" />
+          <rect x={geo.content.x - 3000} y={geo.content.y - 3000} width={geo.content.width + 6000} height={geo.content.height + 6000} fill={MAP_COLORS.land} />
+          {layers.geography && <GeographyLayer showLabels={k >= 0.3} fontSize={Math.min(26, Math.max(12, 10 / k))} />}
 
-          {/* Couche heatmap (densité autour des stations) */}
           {showHeat && snapshot && (
             <g opacity={heatOpacity} pointerEvents="none">
               {network.stations.map((st) => {
                 const load = snapshot.stationLoad[st.index];
                 const activity = snapshot.stationEntries[st.index] + snapshot.stationExits[st.index];
                 const lvl = saturationLevel(load, thresholds);
-                const r = 16 + 26 * Math.sqrt(Math.min(3, activity / 6000)) + 10 * Math.min(2, load);
+                const r = 25 + 40 * Math.sqrt(Math.min(3, activity / 6000)) + 15 * Math.min(2, load);
                 return <circle key={st.id} cx={st.x} cy={st.y} r={r} fill={`url(#heat-${lvl === 'none' ? 'low' : lvl})`} />;
               })}
             </g>
           )}
 
-          {/* Correspondances piétonnes */}
           {layers.interchanges &&
             network.walkingTransfers.map((w) => {
               const a = network.stationById.get(w.from)!;
               const b = network.stationById.get(w.to)!;
-              return <line key={`${w.from}-${w.to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#cbd5e1" strokeWidth={2.4} strokeDasharray="1 4" strokeLinecap="round" />;
+              return <line key={`${w.from}-${w.to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#1E1E1E" strokeWidth={3} strokeDasharray="1 6" strokeLinecap="round" />;
             })}
 
-          {/* Tronçons */}
           {segmentVisuals.map((v) => (
             <MetroSegment key={v.id} v={v} onSelect={onSelectSegment} onHover={onHoverSegment} />
           ))}
 
-          {/* Particules de flux */}
-          {layers.particles && layers.flows && snapshot && (
-            <g pointerEvents="none">
-              {network.edges.map((e) => {
-                const cap = snapshot.edgeCapacity[e.index];
-                if (!cap || !snapshot.segmentAvailable[e.segment]) return null;
-                return <FlowParticles key={e.index} path={geo.edgePath[e.index]} intensity={snapshot.edgeFlow[e.index] / cap} />;
-              })}
-            </g>
-          )}
-
-          {/* Itinéraire sélectionné */}
           {layers.routes && routeSegments && (
             <g pointerEvents="none">
               {routeSegments.map((si, i) => (
-                <path key={`g${i}`} d={geo.segmentPath[si]} fill="none" stroke="#ffffff" strokeWidth={12} opacity={0.35} filter="url(#route-glow)" />
-              ))}
-              {routeSegments.map((si, i) => (
-                <path key={`r${i}`} d={geo.segmentPath[si]} fill="none" stroke="#ffffff" strokeWidth={2.2} strokeDasharray="7 4" strokeLinecap="round" />
+                <path key={i} d={geo.segmentPath[si]} fill="none" stroke="#2563EB" strokeWidth={4} strokeDasharray="10 6" strokeLinecap="round" />
               ))}
             </g>
           )}
 
-          {/* Symboles de ralentissement */}
           {layers.incidents &&
-            network.segments.filter((s) => slowedSegments.has(s.id)).map((s) => <SlowdownGlyph key={s.id} x={geo.segmentMid[s.index].x} y={geo.segmentMid[s.index].y} />)}
+            network.segments
+              .filter((s) => slowedSegments.has(s.id))
+              .map((s) => <SlowdownGlyph key={s.id} x={geo.segmentMid[s.index].x} y={geo.segmentMid[s.index].y} scale={markerScale} />)}
 
-          {/* Numéros de ligne aux terminus */}
           {layers.lineNumbers &&
             geo.terminusBadges.map((b) => {
               const line = network.lineById.get(b.line as never)!;
+              const label = b.line.replace('bis', 'b');
               return (
-                <g key={`${b.stationId}-${b.line}`} transform={`translate(${b.x},${b.y})`} pointerEvents="none">
-                  <circle r={8.5} fill={line.color} stroke="#0b1020" strokeWidth={1.5} />
-                  <text textAnchor="middle" dy={3.6} fontSize={b.line.length > 1 ? 8.5 : 10} fontWeight={800} fill={line.textColor}>
-                    {b.line}
+                <g key={`${b.stationId}-${b.line}`} transform={`translate(${b.x},${b.y}) scale(${markerScale * 0.85})`} pointerEvents="none">
+                  <rect x={-12} y={-10} width={24} height={20} rx={5} fill={line.color} />
+                  <text textAnchor="middle" dy={4.5} fontSize={label.length > 2 ? 10 : 13} fontWeight={800} fill={line.textColor}>
+                    {label}
                   </text>
                 </g>
               );
             })}
 
-          {/* Stations */}
           {stationVisuals.map((v) => (
             <StationNode key={v.station.id} v={v} onSelect={onSelectStation} onFocus={onFocusStation} onHover={onHoverStation} />
           ))}
 
-          {/* Incidents */}
-          {incidentMarkers.map(({ inc, x, y }) => (
-            <IncidentMarker key={inc.id} incident={inc} x={x} y={y} selected={selected?.kind === 'incident' && selected.id === inc.id} onSelect={onSelectIncident} />
-          ))}
         </g>
       </svg>
 
+      <TrainLayer network={network} visible={layers.trains} />
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+        <g ref={labelRef}>
+          {stationVisuals.map((v) => (
+            <StationLabel key={v.station.id} v={v} />
+          ))}
+          <g style={{ pointerEvents: 'auto' }}>
+            {incidentMarkers.map(({ inc, x, y }) => (
+              <IncidentMarker
+                key={inc.id}
+                incident={inc}
+                x={x}
+                y={y}
+                scale={markerScale}
+                selected={selected?.kind === 'incident' && selected.id === inc.id}
+                onSelect={onSelectIncident}
+              />
+            ))}
+          </g>
+        </g>
+      </svg>
       <MapControls />
-      <MapLegend />
       {layers.minimap && <MiniMap content={geo.content} paths={geo.segmentPath} colors={network.segments.map((s) => network.lineById.get(s.line)!.color)} />}
       {hover && <HoverCard hover={hover} network={network} />}
     </div>
@@ -388,18 +434,18 @@ function incidentPosition(network: Network, geo: ReturnType<typeof getGeometry>,
   const t = inc.target;
   if (t.kind === 'station') {
     const st = network.stationById.get(t.stationId);
-    if (st) return { x: st.x + 9, y: st.y - 15 };
+    if (st) return { x: st.x, y: st.y };
   }
   if (t.kind === 'segment') {
     const seg = network.segmentById.get(t.segmentId);
-    if (seg) return { x: geo.segmentMid[seg.index].x, y: geo.segmentMid[seg.index].y - 14 };
+    if (seg) return { x: geo.segmentMid[seg.index].x, y: geo.segmentMid[seg.index].y };
   }
   if (t.kind === 'line') {
     const segs = network.segments.filter((s) => s.line === t.line);
     const mid = segs[Math.floor(segs.length / 2)];
-    if (mid) return { x: geo.segmentMid[mid.index].x + 14, y: geo.segmentMid[mid.index].y - 14 };
+    if (mid) return { x: geo.segmentMid[mid.index].x, y: geo.segmentMid[mid.index].y };
   }
-  return { x: geo.content.x + 60, y: geo.content.y + 60 };
+  return { x: 0, y: 0 };
 }
 
 function HoverCard({ hover, network }: { hover: NonNullable<Hover>; network: Network }) {
@@ -413,9 +459,11 @@ function HoverCard({ hover, network }: { hover: NonNullable<Hover>; network: Net
       <>
         <div className="font-semibold">{st.name}</div>
         <div className="text-muted">
-          Lignes {st.lines.join(', ')} · {snapshot.stationOpen[st.index] ? 'ouverte' : 'fermée'}
+          Ligne{st.lines.length > 1 ? 's' : ''} {st.lines.join(', ')} · {snapshot.stationOpen[st.index] ? 'ouverte' : 'fermée'}
         </div>
-        <div>À quai : {fmtInt(snapshot.stationWaiting[st.index])} voy. ({fmtPct(snapshot.stationLoad[st.index])} de la capacité)</div>
+        <div>
+          {fmtInt(snapshot.stationWaiting[st.index])} voyageurs à quai ({fmtPct(snapshot.stationLoad[st.index])} de la capacité)
+        </div>
       </>
     );
   } else {
@@ -428,27 +476,27 @@ function HoverCard({ hover, network }: { hover: NonNullable<Hover>; network: Net
     body = (
       <>
         <div className="font-semibold">
-          L{seg.line} · {a.name} ↔ {b.name}
+          Ligne {seg.line} · {a.name} ↔ {b.name}
         </div>
         {snapshot.segmentAvailable[seg.index] ? (
           <>
             <div>
-              → {b.name} : {fmtPct(snapshot.edgeSaturation[fwd.index])} · {fmtInt(snapshot.edgeFlow[fwd.index])} voy./h
+              vers {b.name} : {fmtPct(snapshot.edgeSaturation[fwd.index])} · {fmtInt(snapshot.edgeFlow[fwd.index])} voy./h
             </div>
             <div>
-              → {a.name} : {fmtPct(snapshot.edgeSaturation[bwd.index])} · {fmtInt(snapshot.edgeFlow[bwd.index])} voy./h
+              vers {a.name} : {fmtPct(snapshot.edgeSaturation[bwd.index])} · {fmtInt(snapshot.edgeFlow[bwd.index])} voy./h
             </div>
-            {snapshot.segmentDelay[seg.index] > 5 && <div className="text-amber-300">Retard estimé : {fmtMin(snapshot.segmentDelay[seg.index])}</div>}
+            {snapshot.segmentDelay[seg.index] > 5 && <div className="text-amber-700">Retard estimé : {fmtMin(snapshot.segmentDelay[seg.index])}</div>}
           </>
         ) : (
-          <div className="text-red-300">Tronçon interrompu</div>
+          <div className="text-red-600">Tronçon interrompu</div>
         )}
       </>
     );
   }
   return (
     <div
-      className="pointer-events-none fixed z-50 max-w-xs rounded-md border border-edge-strong bg-[#0b1322]/95 px-2.5 py-1.5 text-[11px] leading-relaxed shadow-xl"
+      className="pointer-events-none fixed z-50 max-w-xs rounded-md border border-edge bg-white/95 px-2.5 py-1.5 text-[11px] leading-relaxed text-ink shadow-lg"
       style={{ left: hover.x + 14, top: hover.y + 14 }}
     >
       {body}

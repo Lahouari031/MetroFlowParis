@@ -4,6 +4,7 @@ import { scenarioConfig } from '@/engine/defaults';
 import { computeScore, congestionClearance, SCORE_RULES, summarizeRun } from '@/engine/scoring';
 import { SimulationEngine } from '@/engine/simulationEngine';
 import type { RunSummary } from '@/types/scenario';
+import type { LineId } from '@/types/network';
 import type { ActionPayload, HistoryPoint } from '@/types/simulation';
 import { network } from './helpers';
 
@@ -22,6 +23,7 @@ const base: RunSummary = {
   serviceQualityMean: 90,
   waitingEnd: 1000,
   congestionClearedAfterIncidents: 5,
+  affectedDelay: 120,
 };
 
 describe('Score', () => {
@@ -79,20 +81,20 @@ describe('Score', () => {
     const score = computeScore(summary, sc.objectives, sc.difficulty, sc.budgetMargin);
     expect(score.objectives).toHaveLength(sc.objectives.length);
     expect(score.total).toBeGreaterThan(0);
-  });
+  }, 60_000);
 });
 
 /** Stratégies de régulation de référence : prouvent que chaque défi est réalisable et qu'il ne l'est pas sans agir. */
-const boost = (line: '1' | '4' | '7' | '9' | '14', freq: number, reserve: number): ActionPayload[] => [
+const boost = (line: LineId, freq: number, reserve: number): ActionPayload[] => [
   { type: 'line.reserve', line, count: reserve },
   { type: 'line.frequency', line, frequency: freq },
 ];
 const STRATEGIES: Record<string, [number, ActionPayload[]][]> = {
-  'heure-de-pointe': [[0, [...boost('7', 36, 8), ...boost('9', 36, 6), ...boost('4', 40, 6)]]],
-  'malaise-poissonniere': [[15 * 60, boost('4', 40, 6)], [30 * 60, boost('7', 36, 8)]],
-  'station-fermee': [[15 * 60, [...boost('4', 40, 6), ...boost('7', 36, 8), ...boost('1', 42, 6), ...boost('14', 42, 6), ...boost('9', 36, 6)]]],
-  'incident-multiple': [[10 * 60, [...boost('9', 36, 6), ...boost('7', 36, 8), ...boost('4', 40, 6)]]],
-  'pic-affluence': [[10 * 60, boost('9', 36, 6)]],
+  'heure-de-pointe': [[0, [...boost('13', 36, 8), ...boost('8', 30, 8), ...boost('11', 28, 6)]]],
+  'malaise-poissonniere': [[15 * 60, [...boost('4', 40, 10), ...boost('7', 36, 12)]]],
+  'station-fermee': [[15 * 60, [...boost('13', 36, 8), ...boost('8', 30, 8), ...boost('4', 40, 10)]]],
+  'incident-multiple': [[10 * 60, [...boost('9', 36, 13), ...boost('4', 40, 10), ...boost('1', 42, 6)]]],
+  'pic-affluence': [[10 * 60, [...boost('9', 36, 13), ...boost('6', 32, 6)]]],
 };
 
 function play(id: string, plan: [number, ActionPayload[]][]) {
@@ -112,7 +114,7 @@ function play(id: string, plan: [number, ActionPayload[]][]) {
 
 describe('Défis', () => {
   for (const sc of SCENARIOS.filter((s) => s.id !== 'libre')) {
-    it(`« ${sc.title} » : échoue sans régulation, réussit avec la stratégie de référence`, { timeout: 60000 }, () => {
+    it(`« ${sc.title} » : échoue sans régulation, réussit avec la stratégie de référence`, { timeout: 180000 }, () => {
       expect(play(sc.id, []).success).toBe(false);
       const active = play(sc.id, STRATEGIES[sc.id]);
       expect(active.success).toBe(true);

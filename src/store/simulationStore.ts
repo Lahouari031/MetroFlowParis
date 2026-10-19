@@ -113,3 +113,6 @@ export const useSelection = create<SelectionStore>((set) => ({
   setHoverSegment: (hoverSegment) => set({ hoverSegment }),
   clear: () => set({ selected: null, incidentDraft: null }),
 }));
+
+/** Tableau vide partagé : un sélecteur ne doit pas renvoyer un nouvel objet à chaque appel. */
+export const NO_INCIDENTS: import('@/types/incident').Incident[] = [];

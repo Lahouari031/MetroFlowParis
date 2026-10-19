@@ -14,9 +14,9 @@ import { MedalBadge } from './ResultModal';
 import { Button, ConfirmDialog, cx, Panel } from '../ui/primitives';
 
 export const DIFFICULTY_STYLE: Record<Difficulty, string> = {
-  facile: 'bg-emerald-500/15 text-emerald-300',
-  normal: 'bg-sky-500/15 text-sky-300',
-  difficile: 'bg-red-500/15 text-red-300',
+  facile: 'bg-emerald-500/15 text-emerald-700',
+  normal: 'bg-sky-500/15 text-sky-700',
+  difficile: 'bg-red-500/15 text-red-600',
 };
 
 export function ScenarioSelector() {
@@ -136,7 +136,7 @@ export function AdvancedLauncher() {
           <input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
         </label>
       </div>
-      {error && <p className="text-red-300">{error}</p>}
+      {error && <p className="text-red-600">{error}</p>}
       <p className="text-[11px] text-faint">
         Les incidents du scénario de base sont conservés (décalés depuis la nouvelle heure de début). Même graine + mêmes paramètres + mêmes actions = même simulation.
       </p>
@@ -252,16 +252,16 @@ export function ExportPanel() {
           {title} — {historyLen} minute(s) simulée(s)
         </span>
         <Button
-          onClick={() => {
-            const d = controller.exportData();
+          onClick={async () => {
+            const d = await controller.exportData();
             if (d) downloadText('metroflow-historique.csv', historyToCsv(d.history, d.referenceHistory), 'text/csv');
           }}
         >
           <Download size={13} /> CSV (minute par minute)
         </Button>
         <Button
-          onClick={() => {
-            const d = controller.exportData();
+          onClick={async () => {
+            const d = await controller.exportData();
             if (d) downloadText('metroflow-partie.json', runToJson(d), 'application/json');
           }}
         >

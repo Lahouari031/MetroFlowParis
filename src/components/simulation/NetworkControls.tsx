@@ -18,7 +18,7 @@ export function NetworkControls() {
   const cap = useSimulation((s) => s.snapshot?.lineCapacity);
   const trains = useSimulation((s) => s.snapshot?.lineTrains);
   const fleetLimit = useSimulation((s) => s.snapshot?.lineFleetLimit);
-  const [open, setOpen] = useState<LineId | null>('7');
+  const [open, setOpen] = useState<LineId | null>(null);
   if (!regulation || !freq || !cap || !trains || !fleetLimit) return null;
 
   return (
@@ -51,7 +51,7 @@ export function NetworkControls() {
               <button type="button" className="flex w-full items-center gap-2 px-2 py-1.5" onClick={() => setOpen(isOpen ? null : l.id)} aria-expanded={isOpen}>
                 <LineBadge line={l.id} />
                 <span className="tabular text-[11px]">{fmtNum(freq[l.id], 1)} trains/h</span>
-                <span className={cx('tabular ml-auto text-[10px]', limitedByFleet ? 'text-amber-300' : 'text-faint')}>{fmtInt(cap[l.id] / 1000)}k voy./h</span>
+                <span className={cx('tabular ml-auto text-[10px]', limitedByFleet ? 'text-amber-700' : 'text-faint')}>{fmtInt(cap[l.id] / 1000)}k voy./h</span>
                 {isOpen ? <ChevronDown size={12} className="text-faint" /> : <ChevronRight size={12} className="text-faint" />}
               </button>
               {isOpen && (
@@ -98,7 +98,7 @@ export function NetworkControls() {
                     <span className="tabular text-right text-ink">{l.trainCapacity} places</span>
                   </div>
                   {limitedByFleet && (
-                    <p className="text-[10px] leading-snug text-amber-300">
+                    <p className="text-[10px] leading-snug text-amber-700">
                       La flotte limite la fréquence : mobilisez des rames de réserve pour atteindre la fréquence programmée.
                     </p>
                   )}
